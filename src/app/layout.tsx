@@ -14,33 +14,33 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "VigilApp - Seguridad Inteligente para tu Comunidad",
+  title: "Servicios Integrales CyJ - Seguridad Comunitaria",
   description:
-    "VigilApp es la aplicación de seguridad comunitaria que conecta vecinos con tecnología inteligente: botón SOS, reportes vecinales y geolocalización.",
+    "Plataforma de seguridad comunitaria para gestión de residentes, alertas y vigilancia",
   keywords: [
-    "VigilApp",
+    "Servicios Integrales CyJ",
     "seguridad comunitaria",
     "condominios",
-    "Chile",
-    "botón SOS",
-    "reportes vecinales",
+    "722 residentes",
+    "roles",
+    "guardias",
   ],
-  authors: [{ name: "VigilApp" }],
+  authors: [{ name: "Servicios Integrales CyJ" }],
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "VigilApp",
+    title: "CyJ Seguridad",
   },
   icons: {
     icon: "/download/icon-192.png",
     apple: "/download/icon-192.png",
   },
   openGraph: {
-    title: "VigilApp - Seguridad Inteligente para tu Comunidad",
+    title: "Servicios Integrales CyJ - Seguridad Comunitaria",
     description:
-      "Conecta a tu comunidad con seguridad inteligente. Botón SOS, reportes vecinales y geolocalización.",
-    siteName: "VigilApp",
+      "Plataforma de seguridad comunitaria para gestión de 722+ residentes, alertas y vigilancia.",
+    siteName: "Servicios Integrales CyJ",
     type: "website",
   },
 };
@@ -51,7 +51,7 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
-  themeColor: "#1e40af",
+  themeColor: "#0f4c81",
 };
 
 export default function RootLayout({
@@ -65,7 +65,7 @@ export default function RootLayout({
         <link rel="manifest" href="/manifest.json" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="theme-color" content="#1e40af" />
+        <meta name="theme-color" content="#0f4c81" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}

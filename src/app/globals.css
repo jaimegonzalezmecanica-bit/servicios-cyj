@@ -174,3 +174,22 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* Role badge colors */
+.role-super_admin { background-color: #7c3aed20; color: #7c3aed; border-color: #7c3aed40; }
+.role-admin { background-color: #2563eb20; color: #2563eb; border-color: #2563eb40; }
+.role-comite { background-color: #0891b220; color: #0891b2; border-color: #0891b240; }
+.role-guardia { background-color: #16a34a20; color: #16a34a; border-color: #16a34a40; }
+.role-residente_p { background-color: #ea580c20; color: #ea580c; border-color: #ea580c40; }
+.role-residente { background-color: #d9770620; color: #d97706; border-color: #d9770640; }
+.role-familiar { background-color: #8b5cf620; color: #8b5cf6; border-color: #8b5cf640; }
+.role-visitante { background-color: #64748b20; color: #64748b; border-color: #64748b40; }
+
+/* Fade in animation */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out forwards;
+}

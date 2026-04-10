@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Image from "next/image";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -33,7 +33,6 @@ import {
   Settings,
   Users,
   Flag,
-  X,
   Phone,
   Mail,
   FileText,
@@ -43,40 +42,65 @@ import {
   Heart,
   Filter,
   Plus,
-  XCircle,
+  Crown,
+  BadgeCheck,
+  Home,
+  Eye,
+  Search,
+  Lock,
+  Building2,
+  AlertCircle,
+  Megaphone,
+  Calendar,
+  Wrench,
 } from "lucide-react";
 import {
   mockAlerts,
   incidentMarkers,
   reportCategories,
-  userProfile,
   communityStats,
+  ROLES,
+  hasPermission,
+  getRole,
+  demoAccounts,
+  sampleUsers,
+  roleDistribution,
+  towers,
+  guardsOnDuty,
+  announcements,
   type Alert,
   type IncidentMarker,
+  type RoleId,
+  type Role,
+  type UserProfile,
+  type SampleUser,
 } from "@/lib/mock-data";
 
 /* ═══════════════════════════════════════════════════════════
    TYPES
    ═══════════════════════════════════════════════════════════ */
 
-type TabId = "home" | "report" | "map" | "alerts" | "profile";
+type TabId = "home" | "report" | "map" | "alerts" | "roles" | "admin" | "profile";
 
 interface TabDef {
   id: TabId;
   label: string;
   icon: React.ElementType;
+  required: (role: Role) => boolean;
 }
 
 /* ═══════════════════════════════════════════════════════════
    CONSTANTS
    ═══════════════════════════════════════════════════════════ */
 
-const TABS: TabDef[] = [
-  { id: "home", label: "Inicio", icon: Shield },
-  { id: "report", label: "Reportar", icon: AlertTriangle },
-  { id: "map", label: "Mapa", icon: Map },
-  { id: "alerts", label: "Alertas", icon: Bell },
-  { id: "profile", label: "Perfil", icon: User },
+const ALL_TABS: TabDef[] = [
+  { id: "home", label: "Inicio", icon: Shield, required: (r) => r.permissions.canSOS || r.permissions.canViewAlerts },
+  { id: "report", label: "Reportar", icon: AlertTriangle, required: (r) => r.permissions.canReport },
+  { id: "map", label: "Mapa", icon: Map, required: (r) => r.permissions.canViewMap },
+  { id: "alerts", label: "Alertas", icon: Bell, required: (r) => r.permissions.canViewAlerts },
+  { id: "roles", label: "Roles", icon: Users, required: (r) => r.permissions.canManageUsers || r.permissions.canManageRoles },
+  { id: "admin", label: "Admin", icon: Settings, required: (r) => r.permissions.canViewStats || r.permissions.canManageAlerts || r.permissions.canAssignGuards },
+  { id: "profile", label: "Perfil", icon: User, required: () => true },
 ];
 
 const ALERT_FILTERS = ["Todas", "Activas", "Resueltas", "Mías"];
@@ -84,78 +108,180 @@ const ALERT_FILTERS = ["Todas", "Activas", "Resueltas", "Mías"];
 const MAP_FILTERS = ["Todos", "Hoy", "Críticos", "Resueltos", "Mi zona"];
 
 /* ═══════════════════════════════════════════════════════════
-   HELPER: Category Icon Component
+   HELPERS
    ═══════════════════════════════════════════════════════════ */
 
-function CategoryIcon({ name, size = 18, className = "" }: { name: string; size?: number; className?: string }) {
-  const props = { size, className };
+function CategoryIcon({ name, size = 18 }: { name: string; size?: number }) {
+  const props = { size };
   switch (name) {
-    case "user-x":
-      return <UserX {...props} />;
-    case "volume-2":
-      return <Volume2 {...props} />;
-    case "car":
-      return <Car {...props} />;
-    case "shield-alert":
-      return <ShieldAlert {...props} />;
-    case "door-open":
-      return <DoorOpen {...props} />;
-    case "paw-print":
-      return <PawPrint {...props} />;
-    case "flame":
-      return <Flame {...props} />;
-    case "flag":
-      return <Flag {...props} />;
-    case "more-horizontal":
-      return <MoreHorizontal {...props} />;
-    default:
-      return <AlertTriangle {...props} />;
+    case "user-x": return <UserX {...props} />;
+    case "volume-2": return <Volume2 {...props} />;
+    case "car": return <Car {...props} />;
+    case "shield-alert": return <ShieldAlert {...props} />;
+    case "door-open": return <DoorOpen {...props} />;
+    case "paw-print": return <PawPrint {...props} />;
+    case "flame": return <Flame {...props} />;
+    case "flag": return <Flag {...props} />;
+    case "more-horizontal": return <MoreHorizontal {...props} />;
+    default: return <AlertTriangle {...props} />;
+  }
+}
+
+function RoleIcon({ icon, size = 18, className = "" }: { icon: string; size?: number; className?: string }) {
+  const props = { size, className };
+  switch (icon) {
+    case "crown": return <Crown {...props} />;
+    case "shield": return <Shield {...props} />;
+    case "users": return <Users {...props} />;
+    case "badge-check": return <BadgeCheck {...props} />;
+    case "home": return <Home {...props} />;
+    case "user": return <User {...props} />;
+    case "heart": return <Heart {...props} />;
+    case "eye": return <Eye {...props} />;
+    default: return <User {...props} />;
   }
 }
 
 function getStatusColor(status: string) {
   switch (status) {
-    case "activa":
-      return "border-red-500 bg-red-50 text-red-700";
-    case "en_revision":
-      return "border-amber-500 bg-amber-50 text-amber-700";
-    case "resuelta":
-      return "border-green-500 bg-green-50 text-green-700";
-    default:
-      return "border-slate-300 bg-slate-50 text-slate-700";
-  }
-}
-
-function getPriorityColor(priority: string) {
-  switch (priority) {
-    case "critical":
-      return "bg-red-600";
-    case "high":
-      return "bg-orange-500";
-    case "medium":
-      return "bg-amber-500";
-    case "low":
-      return "bg-blue-500";
-    default:
-      return "bg-slate-500";
+    case "activa": return "border-red-500 bg-red-50 text-red-700";
+    case "en_revision": return "border-amber-500 bg-amber-50 text-amber-700";
+    case "resuelta": return "border-green-500 bg-green-50 text-green-700";
+    default: return "border-slate-300 bg-slate-50 text-slate-700";
   }
 }
 
 function getSeverityColor(severity: string) {
   switch (severity) {
-    case "critical":
-      return "#dc2626";
-    case "warning":
-      return "#f97316";
-    case "info":
-      return "#3b82f6";
-    default:
-      return "#64748b";
+    case "critical": return "#dc2626";
+    case "warning": return "#f97316";
+    case "info": return "#3b82f6";
+    default: return "#64748b";
   }
 }
 
+function InfoIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 16v-4" />
+      <path d="M12 8h.01" />
+    </svg>
+  );
+}
+
 /* ═══════════════════════════════════════════════════════════
-   SOS OVERLAY COMPONENT
+   LOGIN SCREEN
+   ═══════════════════════════════════════════════════════════ */
+
+function LoginScreen({ onLogin }: { onLogin: (user: UserProfile) => void }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [selectedDemo, setSelectedDemo] = useState(0);
+
+  const handleDemoLogin = (account: UserProfile) => {
+    onLogin(account);
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-[#0f4c81] via-[#0d3d66] to-[#0a2d4a] flex flex-col">
+      {/* Header */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 pt-12 pb-6">
+        {/* Logo */}
+        <div className="w-28 h-28 rounded-3xl bg-white shadow-2xl flex items-center justify-center mb-6 overflow-hidden">
+          <Image src="/download/logo-cyj.png" alt="Servicios Integrales CyJ" width={110} height={110} className="object-contain" />
+        </div>
+        <h1 className="text-2xl font-bold text-white text-center">Servicios Integrales CyJ</h1>
+        <p className="text-blue-200 text-sm mt-1 text-center">Plataforma de Seguridad Comunitaria</p>
+
+        {/* Login form */}
+        <div className="w-full max-w-sm mt-8 space-y-4">
+          <div className="space-y-1.5">
+            <Label className="text-blue-200 text-xs font-medium">Email o Teléfono</Label>
+            <Input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="usuario@email.com"
+              className="bg-white/10 border-white/20 text-white placeholder:text-blue-300/50 rounded-xl h-12"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-blue-200 text-xs font-medium">Contraseña</Label>
+            <div className="relative">
+              <Input
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                type="password"
+                placeholder="••••••••"
+                className="bg-white/10 border-white/20 text-white placeholder:text-blue-300/50 rounded-xl h-12 pr-10"
+              />
+              <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-300/50" />
+            </div>
+          </div>
+          <Button
+            onClick={() => handleDemoLogin(demoAccounts[selectedDemo])}
+            className="w-full bg-green-600 hover:bg-green-700 text-white py-6 text-base font-semibold rounded-xl h-12 shadow-lg shadow-green-600/30"
+          >
+            Iniciar Sesión
+          </Button>
+        </div>
+
+        {/* Demo accounts */}
+        <div className="w-full max-w-sm mt-8">
+          <p className="text-blue-300 text-xs font-semibold text-center mb-3">Cuentas de Demostración</p>
+          <div className="space-y-2">
+            {demoAccounts.map((account, idx) => {
+              const roleData = getRole(account.role);
+              return (
+                <button
+                  key={account.role}
+                  onClick={() => {
+                    setSelectedDemo(idx);
+                    handleDemoLogin(account);
+                  }}
+                  className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all active:scale-[0.98] ${
+                    selectedDemo === idx
+                      ? "bg-white/20 border-white/40"
+                      : "bg-white/5 border-white/10 hover:bg-white/10"
+                  }`}
+                >
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-white font-bold text-sm"
+                    style={{ backgroundColor: roleData?.color || "#64748b" }}
+                  >
+                    {account.avatarInitial}
+                  </div>
+                  <div className="flex-1 text-left min-w-0">
+                    <p className="text-sm font-semibold text-white truncate">{account.name}</p>
+                    <p className="text-[11px] text-blue-200 truncate">{account.roleName}</p>
+                  </div>
+                  <div
+                    className="px-2 py-0.5 rounded-full text-[9px] font-bold border"
+                    style={{
+                      backgroundColor: (roleData?.color || "#64748b") + "20",
+                      color: roleData?.color || "#64748b",
+                      borderColor: (roleData?.color || "#64748b") + "40",
+                    }}
+                  >
+                    {account.roleName}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="px-6 pb-8 text-center">
+        <p className="text-blue-300/40 text-[10px]">Servicios Integrales CyJ v2.1.0</p>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SOS OVERLAY
    ═══════════════════════════════════════════════════════════ */
 
 function SOSOverlay({ onCancel }: { onCancel: () => void }) {
@@ -164,29 +290,20 @@ function SOSOverlay({ onCancel }: { onCancel: () => void }) {
 
   useEffect(() => {
     if (countdown <= 0) return;
-    const timer = setInterval(() => {
-      setCountdown((prev) => prev - 1);
-    }, 1000);
+    const timer = setInterval(() => { setCountdown((p) => p - 1); }, 1000);
     return () => clearInterval(timer);
   }, [countdown]);
 
   useEffect(() => {
     if (isHolding) {
-      const timer = setTimeout(() => {
-        onCancel();
-      }, 2000);
+      const timer = setTimeout(() => { onCancel(); }, 2000);
       return () => clearTimeout(timer);
     }
   }, [isHolding, onCancel]);
 
   return (
     <div className="fixed inset-0 z-[100] bg-gradient-to-br from-red-700 via-red-600 to-red-800 flex flex-col items-center justify-center text-white">
-      <div className="absolute inset-0 opacity-20">
-        <Image src="/download/sos-bg.png" alt="" fill className="object-cover" />
-      </div>
-
       <div className="relative z-10 flex flex-col items-center gap-6 px-8">
-        {/* Pulse rings */}
         <div className="relative">
           <div className="absolute inset-0 w-32 h-32 rounded-full bg-red-400/30 animate-ping" />
           <div className="absolute inset-0 w-32 h-32 rounded-full bg-red-400/20 animate-pulse" style={{ animationDelay: "0.5s" }} />
@@ -194,26 +311,20 @@ function SOSOverlay({ onCancel }: { onCancel: () => void }) {
             <span className="text-5xl font-black tracking-wider">SOS</span>
           </div>
         </div>
-
         <div className="text-center space-y-2">
           <h2 className="text-2xl font-bold">ALERTA DE EMERGENCIA</h2>
           <p className="text-red-100 text-sm">Tu ubicación ha sido compartida con la comunidad</p>
         </div>
-
-        {/* Countdown */}
         <div className="bg-black/20 rounded-2xl px-8 py-4 backdrop-blur-sm">
           <div className="text-5xl font-mono font-bold tabular-nums">{countdown}s</div>
           <p className="text-red-200 text-xs mt-1 text-center">Alerta activa</p>
         </div>
-
         <div className="w-full space-y-3">
           <div className="bg-white/10 rounded-xl p-4 text-center backdrop-blur-sm">
             <MapPin className="w-5 h-5 mx-auto mb-1 text-white/80" />
             <p className="text-sm text-white/90">Ubicación enviada al administrador y guardias</p>
           </div>
         </div>
-
-        {/* Cancel button */}
         <button
           onMouseDown={() => setIsHolding(true)}
           onMouseUp={() => setIsHolding(false)}
@@ -221,9 +332,7 @@ function SOSOverlay({ onCancel }: { onCancel: () => void }) {
           onTouchStart={() => setIsHolding(true)}
           onTouchEnd={() => setIsHolding(false)}
           className={`mt-4 px-8 py-4 rounded-2xl text-base font-semibold transition-all ${
-            isHolding
-              ? "bg-white text-red-600 scale-95"
-              : "bg-white/10 text-white/80 border border-white/20"
+            isHolding ? "bg-white text-red-600 scale-95" : "bg-white/10 text-white/80 border border-white/20"
           }`}
         >
           {isHolding ? "Soltando... cancelando" : "Mantener presionado para cancelar"}
@@ -234,13 +343,59 @@ function SOSOverlay({ onCancel }: { onCancel: () => void }) {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   TAB 1: HOME (Inicio)
+   TOP BAR
+   ═══════════════════════════════════════════════════════════ */
+
+function TopBar({ currentUser, currentRole, onNavigate }: { currentUser: UserProfile; currentRole: Role; onNavigate: (tab: TabId) => void }) {
+  return (
+    <div className="bg-gradient-to-r from-[#0f4c81] to-[#0d3d66] px-4 pt-3 pb-3 flex-shrink-0">
+      <div className="flex items-center justify-between text-white/80">
+        <span className="text-[10px] font-medium">9:41</span>
+        <div className="flex items-center gap-1.5">
+          <div className="flex items-end gap-0.5">
+            <div className="w-1 h-1.5 bg-white/80 rounded-sm" />
+            <div className="w-1 h-2.5 bg-white/80 rounded-sm" />
+            <div className="w-1 h-3 bg-white/80 rounded-sm" />
+            <div className="w-1 h-4 bg-white/60 rounded-sm" />
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center justify-between mt-2">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center overflow-hidden">
+            <Image src="/download/logo-cyj.png" alt="CyJ" width={22} height={22} className="object-contain" />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-white font-bold text-sm">Servicios Integrales CyJ</span>
+            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+          </div>
+        </div>
+        <button
+          className="relative w-9 h-9 rounded-full bg-white/10 flex items-center justify-center active:scale-95"
+          onClick={() => onNavigate("alerts")}
+        >
+          <Bell className="w-4 h-4 text-white" />
+          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 rounded-full text-[8px] text-white font-bold flex items-center justify-center">
+            3
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TAB 1: HOME
    ═══════════════════════════════════════════════════════════ */
 
 function HomeTab({
+  currentUser,
+  currentRole,
   onNavigate,
   onSOSActivate,
 }: {
+  currentUser: UserProfile;
+  currentRole: Role;
   onNavigate: (tab: TabId) => void;
   onSOSActivate: () => void;
 }) {
@@ -251,35 +406,33 @@ function HomeTab({
   const handleSOS = () => {
     setShowSOSConfirm(false);
     onSOSActivate();
-    toast({
-      title: "Alerta SOS Activada",
-      description: "Tu ubicación ha sido compartida con la comunidad.",
-    });
+    toast({ title: "Alerta SOS Activada", description: "Tu ubicación ha sido compartida con la comunidad." });
   };
 
+  const quickActions = [
+    { label: "Reportar", icon: Flag, tab: "report" as TabId, color: "bg-orange-50 text-orange-600", perm: "canReport" as const },
+    { label: "Ver Mapa", icon: Map, tab: "map" as TabId, color: "bg-cyan-50 text-cyan-600", perm: "canViewMap" as const },
+    { label: "Comunidad", icon: Users, tab: "alerts" as TabId, color: "bg-purple-50 text-purple-600", perm: "canViewAlerts" as const },
+    { label: "Administrar", icon: Settings, tab: "admin" as TabId, color: "bg-slate-100 text-slate-600", perm: "canViewStats" as const },
+  ];
+
   return (
-    <div className="space-y-4 pb-4">
-      {/* Top Status Bar */}
+    <div className="space-y-4 pb-4 animate-fade-in">
+      {/* Welcome */}
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-slate-500">Hola,</p>
-          <h1 className="text-lg font-bold text-slate-900">{userProfile.name}</h1>
+          <h1 className="text-lg font-bold text-slate-900">{currentUser.name}</h1>
         </div>
-        <button
-          className="relative w-11 h-11 rounded-full bg-white shadow-md flex items-center justify-center"
-          onClick={() => onNavigate("alerts")}
-        >
-          <Bell className="w-5 h-5 text-slate-700" />
-          <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-red-500 rounded-full text-[10px] text-white font-bold flex items-center justify-center">
-            3
-          </span>
-        </button>
+        <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#0f4c81] to-[#0a2d4a] flex items-center justify-center text-white font-bold text-sm">
+          {currentUser.avatarInitial}
+        </div>
       </div>
 
-      {/* Condo name */}
-      <div className="bg-blue-50 rounded-xl px-4 py-2 flex items-center gap-2">
-        <Shield className="w-4 h-4 text-blue-600" />
-        <span className="text-sm text-blue-700 font-medium">{userProfile.condo}</span>
+      {/* Condo badge */}
+      <div className="bg-[#0f4c81]/5 rounded-xl px-4 py-2.5 flex items-center gap-2 border border-[#0f4c81]/10">
+        <Building2 className="w-4 h-4 text-[#0f4c81]" />
+        <span className="text-sm text-[#0f4c81] font-medium">{currentUser.condo} | Torre {currentUser.tower} - U.{currentUser.unit}</span>
       </div>
 
       {/* Safety Status Card */}
@@ -288,7 +441,7 @@ function HomeTab({
           <div className="w-3 h-3 bg-white rounded-full animate-pulse" />
           <div>
             <h2 className="text-lg font-bold">Tu comunidad está SEGURA</h2>
-            <p className="text-green-100 text-sm">No hay alertas activas en este momento</p>
+            <p className="text-green-100 text-sm">{communityStats.activeAlerts === 0 ? "No hay alertas activas" : `${communityStats.activeAlerts} alerta(s) activa(s)`}</p>
           </div>
         </div>
         <div className="mt-3 grid grid-cols-3 gap-2">
@@ -305,26 +458,39 @@ function HomeTab({
             <div className="text-[10px] text-green-100">Miembros</div>
           </div>
         </div>
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          <div className="bg-white/10 rounded-lg px-3 py-1.5 text-center">
+            <div className="text-sm font-bold">{communityStats.guardsOnDuty}</div>
+            <div className="text-[9px] text-green-100">Guardias</div>
+          </div>
+          <div className="bg-white/10 rounded-lg px-3 py-1.5 text-center">
+            <div className="text-sm font-bold">{communityStats.towers}</div>
+            <div className="text-[9px] text-green-100">Torres</div>
+          </div>
+          <div className="bg-white/10 rounded-lg px-3 py-1.5 text-center">
+            <div className="text-sm font-bold">{communityStats.resolvedToday}</div>
+            <div className="text-[9px] text-green-100">Resueltas hoy</div>
+          </div>
+        </div>
       </div>
 
       {/* SOS Button */}
-      <div className="flex justify-center py-4">
-        <button
-          onClick={() => setShowSOSConfirm(true)}
-          className="relative group"
-        >
-          <div className="absolute inset-0 w-[120px] h-[120px] rounded-full bg-red-400/30 animate-ping" />
-          <div className="absolute inset-0 w-[120px] h-[120px] rounded-full bg-red-400/20 animate-pulse" style={{ animationDelay: "0.5s" }} />
-          <div className="relative w-[120px] h-[120px] rounded-full bg-gradient-to-br from-red-500 to-red-700 shadow-xl shadow-red-500/30 flex items-center justify-center active:scale-95 transition-transform">
-            <div className="text-center">
-              <span className="text-3xl font-black text-white tracking-wider">SOS</span>
-              <p className="text-[9px] text-red-100 mt-0.5 font-medium">EMERGENCIA</p>
+      {currentRole.permissions.canSOS && (
+        <div className="flex justify-center py-2">
+          <button onClick={() => setShowSOSConfirm(true)} className="relative group">
+            <div className="absolute inset-0 w-[110px] h-[110px] rounded-full bg-red-400/30 animate-ping" />
+            <div className="absolute inset-0 w-[110px] h-[110px] rounded-full bg-red-400/20 animate-pulse" style={{ animationDelay: "0.5s" }} />
+            <div className="relative w-[110px] h-[110px] rounded-full bg-gradient-to-br from-red-500 to-red-700 shadow-xl shadow-red-500/30 flex items-center justify-center active:scale-95 transition-transform">
+              <div className="text-center">
+                <span className="text-3xl font-black text-white tracking-wider">SOS</span>
+                <p className="text-[9px] text-red-100 mt-0.5 font-medium">EMERGENCIA</p>
+              </div>
             </div>
-          </div>
-        </button>
-      </div>
+          </button>
+        </div>
+      )}
 
-      {/* SOS Confirmation Bottom Sheet */}
+      {/* SOS Confirmation */}
       {showSOSConfirm && (
         <div className="fixed inset-0 z-50 flex items-end justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={() => setShowSOSConfirm(false)} />
@@ -338,87 +504,61 @@ function HomeTab({
               <p className="text-sm text-slate-500">Tu ubicación actual será compartida con todos los miembros de la comunidad y el administrador.</p>
             </div>
             <div className="space-y-2">
-              <Button
-                onClick={handleSOS}
-                className="w-full bg-red-600 hover:bg-red-700 text-white py-6 text-base font-semibold rounded-xl"
-              >
-                Activar SOS
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setShowSOSConfirm(false)}
-                className="w-full py-5 text-base rounded-xl"
-              >
-                Cancelar
-              </Button>
+              <Button onClick={handleSOS} className="w-full bg-red-600 hover:bg-red-700 text-white py-6 text-base font-semibold rounded-xl">Activar SOS</Button>
+              <Button variant="outline" onClick={() => setShowSOSConfirm(false)} className="w-full py-5 text-base rounded-xl">Cancelar</Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Quick Action Buttons */}
+      {/* Quick Actions */}
       <div className="grid grid-cols-4 gap-3">
-        {[
-          { label: "Reportar", icon: Flag, tab: "report" as TabId, color: "bg-orange-50 text-orange-600" },
-          { label: "Ver Mapa", icon: Map, tab: "map" as TabId, color: "bg-blue-50 text-blue-600" },
-          { label: "Comunidad", icon: Users, tab: "alerts" as TabId, color: "bg-purple-50 text-purple-600" },
-          { label: "Configurar", icon: Settings, tab: "profile" as TabId, color: "bg-slate-100 text-slate-600" },
-        ].map((item) => (
-          <button
-            key={item.label}
-            onClick={() => onNavigate(item.tab)}
-            className="flex flex-col items-center gap-1.5 active:scale-95 transition-transform"
-          >
-            <div className={`w-14 h-14 rounded-2xl ${item.color} flex items-center justify-center`}>
-              <item.icon className="w-6 h-6" />
-            </div>
-            <span className="text-[11px] font-medium text-slate-600">{item.label}</span>
-          </button>
-        ))}
+        {quickActions
+          .filter((a) => hasPermission(currentUser.role, a.perm))
+          .map((item) => (
+            <button key={item.label} onClick={() => onNavigate(item.tab)} className="flex flex-col items-center gap-1.5 active:scale-95 transition-transform">
+              <div className={`w-14 h-14 rounded-2xl ${item.color} flex items-center justify-center`}>
+                <item.icon className="w-6 h-6" />
+              </div>
+              <span className="text-[11px] font-medium text-slate-600">{item.label}</span>
+            </button>
+          ))}
+      </div>
+
+      {/* Announcement Banner */}
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-3">
+        <Megaphone className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-amber-800 truncate">{announcements[0].title}</p>
+          <p className="text-[11px] text-amber-600 mt-0.5 line-clamp-2">{announcements[0].description}</p>
+        </div>
       </div>
 
       {/* Recent Alerts */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-base font-bold text-slate-900">Alertas Recientes</h3>
-          <button
-            onClick={() => onNavigate("alerts")}
-            className="text-sm text-blue-600 font-medium flex items-center gap-1"
-          >
+          <button onClick={() => onNavigate("alerts")} className="text-sm text-[#0f4c81] font-medium flex items-center gap-1">
             Ver todas <ChevronRight className="w-4 h-4" />
           </button>
         </div>
-
         <div className="space-y-2">
           {recentAlerts.map((alert) => (
-            <div
-              key={alert.id}
-              className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 flex items-start gap-3"
-            >
-              <div
-                className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                  alert.status === "activa"
-                    ? "bg-red-100 text-red-600"
-                    : alert.status === "en_revision"
-                      ? "bg-amber-100 text-amber-600"
-                      : "bg-green-100 text-green-600"
-                }`}
-              >
+            <div key={alert.id} className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 flex items-start gap-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                alert.status === "activa" ? "bg-red-100 text-red-600" : alert.status === "en_revision" ? "bg-amber-100 text-amber-600" : "bg-green-100 text-green-600"
+              }`}>
                 <CategoryIcon name={alert.categoryIcon} size={20} />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-2">
                   <h4 className="text-sm font-semibold text-slate-900 truncate">{alert.title}</h4>
-                  <Badge
-                    variant="outline"
-                    className={`text-[10px] px-2 py-0 border-0 ${getStatusColor(alert.status)}`}
-                  >
+                  <Badge variant="outline" className={`text-[10px] px-2 py-0 border-0 ${getStatusColor(alert.status)}`}>
                     {alert.status === "activa" ? "Activa" : alert.status === "en_revision" ? "Revisión" : "Resuelta"}
                   </Badge>
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  {alert.time}
+                  <Clock className="w-3 h-3" /> {alert.time}
                 </p>
               </div>
             </div>
@@ -430,7 +570,7 @@ function HomeTab({
 }
 
 /* ═══════════════════════════════════════════════════════════
-   TAB 2: REPORT (Reportar)
+   TAB 2: REPORT
    ═══════════════════════════════════════════════════════════ */
 
 function ReportTab({ onNavigate }: { onNavigate: (tab: TabId) => void }) {
@@ -439,51 +579,25 @@ function ReportTab({ onNavigate }: { onNavigate: (tab: TabId) => void }) {
   const [description, setDescription] = useState("");
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [useLocation, setUseLocation] = useState(true);
-  const [priority, setPriority] = useState<string>("medium");
+  const [priority, setPriority] = useState("medium");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
   const handleSubmit = async () => {
-    if (!selectedCategory) {
-      toast({ title: "Selecciona una categoría", description: "Debes elegir el tipo de incidente.", variant: "destructive" });
-      return;
-    }
-    if (!description.trim()) {
-      toast({ title: "Agrega una descripción", description: "Describe lo que sucedió.", variant: "destructive" });
-      return;
-    }
-
+    if (!selectedCategory) { toast({ title: "Selecciona una categoría", description: "Debes elegir el tipo de incidente.", variant: "destructive" }); return; }
+    if (!description.trim()) { toast({ title: "Agrega una descripción", description: "Describe lo que sucedió.", variant: "destructive" }); return; }
     setIsSubmitting(true);
     try {
-      const res = await fetch("/api/alert", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          category: selectedCategory,
-          description,
-          location: useLocation ? "Ubicación actual" : "No especificada",
-          isAnonymous,
-          priority,
-        }),
-      });
+      const res = await fetch("/api/alert", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category: selectedCategory, description, location: useLocation ? "Ubicación actual" : "No especificada", isAnonymous, priority }) });
       const data = await res.json();
-      if (data.success) {
-        setShowSuccess(true);
-        setTimeout(() => {
-          setShowSuccess(false);
-          onNavigate("alerts");
-        }, 2000);
-      }
-    } catch {
-      toast({ title: "Error", description: "No se pudo enviar el reporte.", variant: "destructive" });
-    } finally {
-      setIsSubmitting(false);
-    }
+      if (data.success) { setShowSuccess(true); setTimeout(() => { setShowSuccess(false); onNavigate("alerts"); }, 2000); }
+    } catch { toast({ title: "Error", description: "No se pudo enviar el reporte.", variant: "destructive" }); }
+    finally { setIsSubmitting(false); }
   };
 
   if (showSuccess) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 animate-fade-in">
         <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center animate-bounce">
           <CheckCircle2 className="w-10 h-10 text-green-600" />
         </div>
@@ -494,90 +608,42 @@ function ReportTab({ onNavigate }: { onNavigate: (tab: TabId) => void }) {
   }
 
   return (
-    <div className="space-y-5 pb-4">
-      {/* Header */}
+    <div className="space-y-5 pb-4 animate-fade-in">
       <div>
         <h1 className="text-xl font-bold text-slate-900">Reportar Incidente</h1>
         <p className="text-sm text-slate-500 mt-1">Selecciona la categoría y describe lo que sucedió</p>
       </div>
-
-      {/* Category Selector */}
       <div className="space-y-2">
         <Label className="text-sm font-semibold text-slate-700">Categoría</Label>
         <div className="grid grid-cols-4 gap-2">
           {reportCategories.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => setSelectedCategory(cat.id)}
-              className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all active:scale-95 ${
-                selectedCategory === cat.id
-                  ? "border-blue-500 bg-blue-50"
-                  : "border-slate-200 bg-white hover:border-slate-300"
-              }`}
-            >
-              <div
-                className="w-10 h-10 rounded-lg flex items-center justify-center"
-                style={{ backgroundColor: cat.color + "15" }}
-              >
-                <CategoryIcon name={cat.icon} size={20} className="" />
-                <style>{`
-                  [data-cat-icon="${cat.id}"] { color: ${cat.color}; }
-                `}</style>
+            <button key={cat.id} onClick={() => setSelectedCategory(cat.id)} className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all active:scale-95 ${selectedCategory === cat.id ? "border-[#0f4c81] bg-[#0f4c81]/5" : "border-slate-200 bg-white hover:border-slate-300"}`}>
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: cat.color + "15", color: cat.color }}>
+                <CategoryIcon name={cat.icon} size={20} />
               </div>
-              <span className="text-[10px] font-medium text-slate-600 text-center leading-tight">
-                {cat.label}
-              </span>
+              <span className="text-[10px] font-medium text-slate-600 text-center leading-tight">{cat.label}</span>
             </button>
           ))}
         </div>
       </div>
-
-      {/* Description */}
       <div className="space-y-2">
         <Label className="text-sm font-semibold text-slate-700">Descripción</Label>
-        <Textarea
-          placeholder="Describe lo que sucedió..."
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          className="min-h-[100px] rounded-xl resize-none border-slate-200"
-        />
+        <Textarea placeholder="Describe lo que sucedió..." value={description} onChange={(e) => setDescription(e.target.value)} className="min-h-[100px] rounded-xl resize-none border-slate-200" />
       </div>
-
-      {/* Location */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <MapPin className="w-5 h-5 text-blue-600" />
-            <span className="text-sm font-semibold text-slate-700">Ubicación actual</span>
-          </div>
+          <div className="flex items-center gap-2"><MapPin className="w-5 h-5 text-[#0f4c81]" /><span className="text-sm font-semibold text-slate-700">Ubicación actual</span></div>
           <Switch checked={useLocation} onCheckedChange={setUseLocation} />
         </div>
-        {useLocation && (
-          <div className="relative h-32 rounded-xl overflow-hidden bg-slate-100">
-            <Image src="/download/map-bg.png" alt="Mapa" fill className="object-cover" />
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="bg-blue-500 w-4 h-4 rounded-full border-2 border-white shadow-lg" />
-            </div>
-            <div className="absolute bottom-2 left-2 bg-white/90 backdrop-blur-sm rounded-lg px-2 py-1 text-[10px] text-slate-600">
-              Calle Los Robles #234
-            </div>
-          </div>
-        )}
       </div>
-
-      {/* Photo attachment */}
       <div className="space-y-2">
         <Label className="text-sm font-semibold text-slate-700">Evidencia fotográfica</Label>
         <button className="w-full border-2 border-dashed border-slate-200 rounded-xl p-6 flex flex-col items-center gap-2 active:bg-slate-50 transition-colors">
-          <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center">
-            <Camera className="w-6 h-6 text-slate-400" />
-          </div>
+          <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center"><Camera className="w-6 h-6 text-slate-400" /></div>
           <span className="text-sm font-medium text-slate-500">Agregar foto</span>
           <span className="text-[10px] text-slate-400">Toma una foto o selecciona de la galería</span>
         </button>
       </div>
-
-      {/* Anonymous toggle */}
       <div className="flex items-center justify-between bg-white rounded-xl border border-slate-200 p-4">
         <div>
           <span className="text-sm font-semibold text-slate-700">Reportar de forma anónima</span>
@@ -585,8 +651,6 @@ function ReportTab({ onNavigate }: { onNavigate: (tab: TabId) => void }) {
         </div>
         <Switch checked={isAnonymous} onCheckedChange={setIsAnonymous} />
       </div>
-
-      {/* Priority selector */}
       <div className="space-y-2">
         <Label className="text-sm font-semibold text-slate-700">Prioridad</Label>
         <div className="grid grid-cols-4 gap-2">
@@ -596,38 +660,18 @@ function ReportTab({ onNavigate }: { onNavigate: (tab: TabId) => void }) {
             { value: "high", label: "Alta", color: "bg-orange-100 text-orange-700 border-orange-200" },
             { value: "critical", label: "Crítica", color: "bg-red-100 text-red-700 border-red-200" },
           ].map((p) => (
-            <button
-              key={p.value}
-              onClick={() => setPriority(p.value)}
-              className={`py-2.5 rounded-xl text-xs font-semibold border-2 transition-all active:scale-95 ${
-                priority === p.value ? p.color : "border-slate-200 bg-white text-slate-500"
-              }`}
-            >
-              {p.label}
-            </button>
+            <button key={p.value} onClick={() => setPriority(p.value)} className={`py-2.5 rounded-xl text-xs font-semibold border-2 transition-all active:scale-95 ${priority === p.value ? p.color : "border-slate-200 bg-white text-slate-500"}`}>{p.label}</button>
           ))}
         </div>
       </div>
-
-      {/* Submit */}
-      <Button
-        onClick={handleSubmit}
-        disabled={isSubmitting}
-        className="w-full bg-green-600 hover:bg-green-700 text-white py-6 text-base font-semibold rounded-xl"
-      >
+      <Button onClick={handleSubmit} disabled={isSubmitting} className="w-full bg-green-600 hover:bg-green-700 text-white py-6 text-base font-semibold rounded-xl">
         {isSubmitting ? (
           <span className="flex items-center gap-2">
-            <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-            </svg>
+            <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
             Enviando...
           </span>
         ) : (
-          <span className="flex items-center gap-2">
-            <Send className="w-5 h-5" />
-            Enviar Reporte
-          </span>
+          <span className="flex items-center gap-2"><Send className="w-5 h-5" /> Enviar Reporte</span>
         )}
       </Button>
     </div>
@@ -635,147 +679,72 @@ function ReportTab({ onNavigate }: { onNavigate: (tab: TabId) => void }) {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   TAB 3: MAP (Mapa)
+   TAB 3: MAP
    ═══════════════════════════════════════════════════════════ */
 
 function MapTab() {
   const [selectedFilter, setSelectedFilter] = useState("Todos");
   const [selectedMarker, setSelectedMarker] = useState<IncidentMarker | null>(null);
-
-  const filteredMarkers =
-    selectedFilter === "Críticos"
-      ? incidentMarkers.filter((m) => m.severity === "critical")
-      : selectedFilter === "Resueltos"
-        ? incidentMarkers.slice(4, 6)
-        : incidentMarkers;
+  const filteredMarkers = selectedFilter === "Críticos" ? incidentMarkers.filter((m) => m.severity === "critical") : selectedFilter === "Resueltos" ? incidentMarkers.slice(4, 6) : incidentMarkers;
 
   return (
-    <div className="space-y-0 pb-4">
-      {/* Header */}
+    <div className="space-y-0 pb-4 animate-fade-in">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-slate-900">Mapa de Incidentes</h1>
-        <button className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center shadow-sm">
-          <Filter className="w-5 h-5 text-slate-600" />
-        </button>
+        <button className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center shadow-sm"><Filter className="w-5 h-5 text-slate-600" /></button>
       </div>
-
-      {/* Map Area */}
       <div className="relative h-[380px] rounded-2xl overflow-hidden shadow-sm border border-slate-200 bg-slate-100 mt-3">
         <Image src="/download/map-bg.png" alt="Mapa de la comunidad" fill className="object-cover" />
-
-        {/* Grid overlay for map feel */}
-        <div className="absolute inset-0" style={{
-          backgroundImage: "linear-gradient(rgba(30,64,175,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(30,64,175,0.05) 1px, transparent 1px)",
-          backgroundSize: "40px 40px",
-        }} />
-
-        {/* Condominium perimeter outline */}
-        <div className="absolute inset-4 border-2 border-dashed border-blue-300 rounded-3xl" />
-
-        {/* Current location */}
+        <div className="absolute inset-0" style={{ backgroundImage: "linear-gradient(rgba(15,76,129,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(15,76,129,0.05) 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
+        <div className="absolute inset-4 border-2 border-dashed border-[#0f4c81]/30 rounded-3xl" />
         <div className="absolute" style={{ left: "45%", top: "48%" }}>
           <div className="relative">
-            <div className="absolute inset-0 w-6 h-6 bg-blue-400/30 rounded-full animate-ping" />
-            <div className="relative w-6 h-6 bg-blue-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center">
-              <div className="w-2 h-2 bg-white rounded-full" />
-            </div>
+            <div className="absolute inset-0 w-6 h-6 bg-[#0f4c81]/30 rounded-full animate-ping" />
+            <div className="relative w-6 h-6 bg-[#0f4c81] rounded-full border-2 border-white shadow-lg flex items-center justify-center"><div className="w-2 h-2 bg-white rounded-full" /></div>
           </div>
-          <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[9px] bg-blue-600 text-white px-1.5 py-0.5 rounded-full whitespace-nowrap font-medium">
-            Tú
-          </span>
+          <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[9px] bg-[#0f4c81] text-white px-1.5 py-0.5 rounded-full whitespace-nowrap font-medium">Tú</span>
         </div>
-
-        {/* Incident markers */}
         {filteredMarkers.map((marker) => (
-          <button
-            key={marker.id}
-            onClick={() => setSelectedMarker(marker)}
-            className="absolute transition-transform active:scale-90 hover:scale-110"
-            style={{ left: `${marker.lng}%`, top: `${marker.lat}%` }}
-          >
-            <div
-              className="w-8 h-8 rounded-full border-2 border-white shadow-lg flex items-center justify-center"
-              style={{ backgroundColor: getSeverityColor(marker.severity) }}
-            >
-              {marker.severity === "critical" ? (
-                <AlertTriangle className="w-4 h-4 text-white" />
-              ) : marker.severity === "warning" ? (
-                <AlertTriangle className="w-4 h-4 text-white" />
-              ) : (
-                <InfoIcon />
-              )}
+          <button key={marker.id} onClick={() => setSelectedMarker(marker)} className="absolute transition-transform active:scale-90 hover:scale-110" style={{ left: `${marker.lng}%`, top: `${marker.lat}%` }}>
+            <div className="w-8 h-8 rounded-full border-2 border-white shadow-lg flex items-center justify-center" style={{ backgroundColor: getSeverityColor(marker.severity) }}>
+              {marker.severity === "info" ? <InfoIcon /> : <AlertTriangle className="w-4 h-4 text-white" />}
             </div>
           </button>
         ))}
-
-        {/* Legend */}
         <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm rounded-xl p-2.5 shadow-lg space-y-1.5">
           <p className="text-[10px] font-semibold text-slate-700">Leyenda</p>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-red-600" />
-            <span className="text-[10px] text-slate-500">Crítico</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-orange-500" />
-            <span className="text-[10px] text-slate-500">Advertencia</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-blue-500" />
-            <span className="text-[10px] text-slate-500">Info</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-blue-500 border-2 border-white shadow" />
-            <span className="text-[10px] text-slate-500">Mi ubicación</span>
-          </div>
+          {[{ c: "bg-red-600", l: "Crítico" }, { c: "bg-orange-500", l: "Advertencia" }, { c: "bg-blue-500", l: "Info" }, { c: "bg-[#0f4c81]", l: "Mi ubicación" }].map((x) => (
+            <div key={x.l} className="flex items-center gap-1.5">
+              <div className={`w-3 h-3 rounded-full ${x.c} ${x.l === "Mi ubicación" ? "border-2 border-white shadow" : ""}`} />
+              <span className="text-[10px] text-slate-500">{x.l}</span>
+            </div>
+          ))}
         </div>
       </div>
-
-      {/* Filter Chips */}
       <div className="flex gap-2 overflow-x-auto py-3 scrollbar-hide">
-        {MAP_FILTERS.map((filter) => (
-          <button
-            key={filter}
-            onClick={() => setSelectedFilter(filter)}
-            className={`px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all active:scale-95 ${
-              selectedFilter === filter
-                ? "bg-blue-600 text-white shadow-md"
-                : "bg-white border border-slate-200 text-slate-600"
-            }`}
-          >
-            {filter}
-          </button>
+        {MAP_FILTERS.map((f) => (
+          <button key={f} onClick={() => setSelectedFilter(f)} className={`px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all active:scale-95 ${selectedFilter === f ? "bg-[#0f4c81] text-white shadow-md" : "bg-white border border-slate-200 text-slate-600"}`}>{f}</button>
         ))}
       </div>
-
-      {/* Selected marker bottom sheet */}
       {selectedMarker && (
         <div className="fixed inset-0 z-50 flex items-end justify-center">
           <div className="absolute inset-0 bg-black/30" onClick={() => setSelectedMarker(null)} />
           <div className="relative bg-white rounded-t-3xl w-full max-w-md p-6 pb-8 space-y-3 animate-slide-up">
             <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto" />
             <div className="flex items-start gap-3">
-              <div
-                className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{ backgroundColor: getSeverityColor(selectedMarker.severity) + "15" }}
-              >
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: getSeverityColor(selectedMarker.severity) + "15" }}>
                 <AlertTriangle className="w-6 h-6" style={{ color: getSeverityColor(selectedMarker.severity) }} />
               </div>
               <div className="flex-1">
                 <h3 className="text-base font-bold text-slate-900">{selectedMarker.title}</h3>
                 <p className="text-sm text-slate-500 mt-0.5">{selectedMarker.description}</p>
                 <div className="flex items-center gap-3 mt-2">
-                  <span className="text-[11px] text-slate-400 flex items-center gap-1">
-                    <Clock className="w-3 h-3" /> {selectedMarker.time}
-                  </span>
-                  <span className="text-[11px] text-slate-400 flex items-center gap-1">
-                    <MapPin className="w-3 h-3" /> {selectedMarker.distance}
-                  </span>
+                  <span className="text-[11px] text-slate-400 flex items-center gap-1"><Clock className="w-3 h-3" /> {selectedMarker.time}</span>
+                  <span className="text-[11px] text-slate-400 flex items-center gap-1"><MapPin className="w-3 h-3" /> {selectedMarker.distance}</span>
                 </div>
               </div>
             </div>
-            <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl">
-              Ver detalles completos
-            </Button>
+            <Button className="w-full bg-[#0f4c81] hover:bg-[#0a3a63] text-white rounded-xl">Ver detalles completos</Button>
           </div>
         </div>
       )}
@@ -783,208 +752,449 @@ function MapTab() {
   );
 }
 
-function InfoIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <path d="M12 16v-4" />
-      <path d="M12 8h.01" />
-    </svg>
-  );
-}
-
 /* ═══════════════════════════════════════════════════════════
-   TAB 4: ALERTS (Alertas)
+   TAB 4: ALERTS
    ═══════════════════════════════════════════════════════════ */
 
 function AlertsTab() {
   const [selectedFilter, setSelectedFilter] = useState("Todas");
   const { toast } = useToast();
-
-  const filteredAlerts =
-    selectedFilter === "Activas"
-      ? mockAlerts.filter((a) => a.status === "activa")
-      : selectedFilter === "Resueltas"
-        ? mockAlerts.filter((a) => a.status === "resuelta")
-        : selectedFilter === "Mías"
-          ? mockAlerts.filter((_, i) => i % 3 === 0)
-          : mockAlerts;
+  const filteredAlerts = selectedFilter === "Activas" ? mockAlerts.filter((a) => a.status === "activa") : selectedFilter === "Resueltas" ? mockAlerts.filter((a) => a.status === "resuelta") : selectedFilter === "Mías" ? mockAlerts.filter((_, i) => i % 3 === 0) : mockAlerts;
 
   return (
-    <div className="space-y-4 pb-20">
-      {/* Header */}
+    <div className="space-y-4 pb-20 animate-fade-in">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-slate-900">Alertas Comunitarias</h1>
-        <button className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center shadow-sm">
-          <Filter className="w-5 h-5 text-slate-600" />
-        </button>
+        <button className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center shadow-sm"><Filter className="w-5 h-5 text-slate-600" /></button>
       </div>
-
-      {/* Filter tabs */}
-      <div className="flex gap-2">
-        {ALERT_FILTERS.map((filter) => (
-          <button
-            key={filter}
-            onClick={() => setSelectedFilter(filter)}
-            className={`px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all active:scale-95 ${
-              selectedFilter === filter
-                ? "bg-blue-600 text-white shadow-md"
-                : "bg-white border border-slate-200 text-slate-600"
-            }`}
-          >
-            {filter}
-          </button>
+      <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+        {ALERT_FILTERS.map((f) => (
+          <button key={f} onClick={() => setSelectedFilter(f)} className={`px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all active:scale-95 ${selectedFilter === f ? "bg-[#0f4c81] text-white shadow-md" : "bg-white border border-slate-200 text-slate-600"}`}>{f}</button>
         ))}
       </div>
-
-      {/* Alert cards list */}
       {filteredAlerts.length === 0 ? (
         <div className="flex flex-col items-center justify-center min-h-[40vh] gap-3">
-          <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center">
-            <Bell className="w-8 h-8 text-slate-300" />
-          </div>
+          <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center"><Bell className="w-8 h-8 text-slate-300" /></div>
           <p className="text-sm text-slate-400">No hay alertas en esta categoría</p>
         </div>
       ) : (
         <div className="space-y-2">
           {filteredAlerts.map((alert) => (
-            <div
-              key={alert.id}
-              className={`bg-white rounded-xl p-4 shadow-sm border-l-4 ${
-                alert.status === "activa"
-                  ? "border-l-red-500"
-                  : alert.status === "en_revision"
-                    ? "border-l-amber-500"
-                    : "border-l-green-500"
-              }`}
-            >
+            <div key={alert.id} className={`bg-white rounded-xl p-4 shadow-sm border-l-4 ${alert.status === "activa" ? "border-l-red-500" : alert.status === "en_revision" ? "border-l-amber-500" : "border-l-green-500"}`}>
               <div className="flex items-start gap-3">
-                <div
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                    alert.priority === "critical"
-                      ? "bg-red-100 text-red-600"
-                      : alert.priority === "high"
-                        ? "bg-orange-100 text-orange-600"
-                        : alert.priority === "medium"
-                          ? "bg-amber-100 text-amber-600"
-                          : "bg-blue-100 text-blue-600"
-                  }`}
-                >
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${alert.priority === "critical" ? "bg-red-100 text-red-600" : alert.priority === "high" ? "bg-orange-100 text-orange-600" : alert.priority === "medium" ? "bg-amber-100 text-amber-600" : "bg-blue-100 text-blue-600"}`}>
                   <CategoryIcon name={alert.categoryIcon} size={20} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
                     <h4 className="text-sm font-semibold text-slate-900 truncate">{alert.title}</h4>
-                    <Badge
-                      variant="outline"
-                      className={`text-[10px] px-2 py-0 border-0 flex-shrink-0 ${getStatusColor(alert.status)}`}
-                    >
-                      {alert.status === "activa"
-                        ? "Activa"
-                        : alert.status === "en_revision"
-                          ? "En revisión"
-                          : "Resuelta"}
+                    <Badge variant="outline" className={`text-[10px] px-2 py-0 border-0 flex-shrink-0 ${getStatusColor(alert.status)}`}>
+                      {alert.status === "activa" ? "Activa" : alert.status === "en_revision" ? "En revisión" : "Resuelta"}
                     </Badge>
                   </div>
                   <p className="text-xs text-slate-500 mt-1 line-clamp-2">{alert.description}</p>
                   <div className="flex items-center gap-3 mt-2">
-                    <span className="text-[11px] text-slate-400 flex items-center gap-1">
-                      <Clock className="w-3 h-3" /> {alert.time}
-                    </span>
-                    <span className="text-[11px] text-slate-400 flex items-center gap-1">
-                      <MapPin className="w-3 h-3" /> {alert.location.split(" - ")[0]}
-                    </span>
-                    <span className="text-[11px] text-slate-400 flex items-center gap-1">
-                      <MessageSquare className="w-3 h-3" /> {alert.comments}
-                    </span>
+                    <span className="text-[11px] text-slate-400 flex items-center gap-1"><Clock className="w-3 h-3" /> {alert.time}</span>
+                    <span className="text-[11px] text-slate-400 flex items-center gap-1"><MapPin className="w-3 h-3" /> {alert.location.split(" - ")[0]}</span>
+                    <span className="text-[11px] text-slate-400 flex items-center gap-1"><MessageSquare className="w-3 h-3" /> {alert.comments}</span>
                   </div>
-                  {alert.isAnonymous && (
-                    <span className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
-                      <User className="w-3 h-3" /> Anónimo
-                    </span>
-                  )}
+                  {alert.isAnonymous && <span className="text-[10px] text-slate-400 mt-1 flex items-center gap-1"><User className="w-3 h-3" /> Anónimo</span>}
                 </div>
               </div>
             </div>
           ))}
         </div>
       )}
-
-      {/* FAB */}
-      <button
-        onClick={() => {
-          toast({ title: "Nueva alerta", description: "Redirigiendo al formulario de reporte..." });
-        }}
-        className="fixed bottom-24 right-4 md:right-[calc(50%-200px+16px)] w-14 h-14 bg-green-600 hover:bg-green-700 text-white rounded-2xl shadow-xl shadow-green-600/30 flex items-center justify-center active:scale-95 transition-transform z-40"
-      >
-        <Plus className="w-6 h-6" />
-      </button>
     </div>
   );
 }
 
 /* ═══════════════════════════════════════════════════════════
-   TAB 5: PROFILE (Perfil)
+   TAB 5: ROLES (Admin/Comité only)
    ═══════════════════════════════════════════════════════════ */
 
-function ProfileTab() {
+function RolesTab({ currentUser, currentRole }: { currentUser: UserProfile; currentRole: Role }) {
+  const [search, setSearch] = useState("");
+  const [filterRole, setFilterRole] = useState<string>("all");
+  const [selectedUser, setSelectedUser] = useState<SampleUser | null>(null);
+  const [showRoleSelector, setShowRoleSelector] = useState(false);
+
+  const filteredUsers = sampleUsers.filter((u) => {
+    if (search && !u.name.toLowerCase().includes(search.toLowerCase()) && !u.unit.includes(search)) return false;
+    if (filterRole !== "all" && u.role !== filterRole) return false;
+    return true;
+  });
+
+  const maxCount = Math.max(...roleDistribution.map((r) => r.count));
+
+  return (
+    <div className="space-y-4 pb-4 animate-fade-in">
+      <div>
+        <h1 className="text-xl font-bold text-slate-900">Gestión de Roles y Usuarios</h1>
+        <p className="text-sm text-slate-500 mt-1">Total de residentes: {communityStats.totalMembers}</p>
+      </div>
+
+      {/* Role Distribution Bar Chart */}
+      <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+        <h3 className="text-sm font-bold text-slate-700">Distribución de Roles</h3>
+        <div className="space-y-2">
+          {roleDistribution.map((rd) => {
+            const role = getRole(rd.roleId);
+            if (!role) return null;
+            const pct = (rd.count / maxCount) * 100;
+            return (
+              <div key={rd.roleId} className="flex items-center gap-2">
+                <div className="w-24 flex-shrink-0">
+                  <span className="text-[10px] font-medium text-slate-600 truncate block">{role.name}</span>
+                </div>
+                <div className="flex-1 bg-slate-100 rounded-full h-5 overflow-hidden">
+                  <div className="h-full rounded-full transition-all flex items-center pl-2" style={{ width: `${pct}%`, backgroundColor: role.color, minWidth: "32px" }}>
+                    <span className="text-[9px] font-bold text-white">{rd.count}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Search + Filter */}
+      <div className="space-y-2">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por nombre o unidad..."
+            className="pl-9 rounded-xl border-slate-200 h-10"
+          />
+        </div>
+        <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1">
+          <button onClick={() => setFilterRole("all")} className={`px-3 py-1.5 rounded-full text-[10px] font-semibold whitespace-nowrap transition-all ${filterRole === "all" ? "bg-[#0f4c81] text-white" : "bg-white border border-slate-200 text-slate-600"}`}>Todos</button>
+          {ROLES.map((r) => (
+            <button key={r.id} onClick={() => setFilterRole(r.id)} className={`px-3 py-1.5 rounded-full text-[10px] font-semibold whitespace-nowrap transition-all ${filterRole === r.id ? "text-white" : "bg-white border border-slate-200 text-slate-600"}`} style={filterRole === r.id ? { backgroundColor: r.color } : {}}>
+              {r.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Users List */}
+      <div className="space-y-2 max-h-96 overflow-y-auto">
+        {filteredUsers.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 gap-2">
+            <Users className="w-8 h-8 text-slate-300" />
+            <p className="text-sm text-slate-400">No se encontraron usuarios</p>
+          </div>
+        ) : (
+          filteredUsers.map((user) => {
+            const role = getRole(user.role);
+            return (
+              <button key={user.id} onClick={() => setSelectedUser(user)} className="w-full bg-white rounded-xl p-3 shadow-sm border border-slate-100 flex items-center gap-3 active:bg-slate-50 transition-colors text-left">
+                <div className="relative">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm" style={{ backgroundColor: role?.color || "#64748b" }}>
+                    {user.avatarInitial}
+                  </div>
+                  <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${user.online ? "bg-green-500" : "bg-slate-300"}`} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-slate-900 truncate">{user.name}</p>
+                  <p className="text-[11px] text-slate-400">{user.tower !== "N/A" ? `Torre ${user.tower} - U.${user.unit}` : "Personal de seguridad"}</p>
+                </div>
+                <div className="px-2 py-0.5 rounded-full text-[9px] font-bold border flex-shrink-0" style={{ backgroundColor: (role?.color || "#64748b") + "20", color: role?.color || "#64748b", borderColor: (role?.color || "#64748b") + "40" }}>
+                  {user.roleName}
+                </div>
+              </button>
+            );
+          })
+        )}
+      </div>
+
+      {/* Add User button (admin only) */}
+      {currentRole.permissions.canManageUsers && (
+        <Button className="w-full bg-[#0f4c81] hover:bg-[#0a3a63] text-white rounded-xl">
+          <Plus className="w-4 h-4 mr-2" /> Agregar Usuario
+        </Button>
+      )}
+
+      {/* User Detail Bottom Sheet */}
+      {selectedUser && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setSelectedUser(null)} />
+          <div className="relative bg-white rounded-t-3xl w-full max-w-md p-6 pb-8 space-y-4 animate-slide-up max-h-[80vh] overflow-y-auto">
+            <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto" />
+            <div className="flex items-center gap-4">
+              {(() => {
+                const role = getRole(selectedUser.role);
+                return (
+                  <>
+                    <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-white font-bold text-xl" style={{ backgroundColor: role?.color || "#64748b" }}>
+                      {selectedUser.avatarInitial}
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-base font-bold text-slate-900">{selectedUser.name}</h3>
+                      <div className="px-2 py-0.5 rounded-full text-[10px] font-bold border inline-flex items-center gap-1 mt-1" style={{ backgroundColor: (role?.color || "#64748b") + "20", color: role?.color || "#64748b", borderColor: (role?.color || "#64748b") + "40" }}>
+                        <RoleIcon icon={role?.icon || "user"} size={12} /> {selectedUser.roleName}
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between"><span className="text-slate-500">Torre / Unidad</span><span className="font-medium text-slate-900">{selectedUser.tower !== "N/A" ? `Torre ${selectedUser.tower} - U.${selectedUser.unit}` : "N/A"}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Teléfono</span><span className="font-medium text-slate-900">{selectedUser.phone}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Email</span><span className="font-medium text-slate-900 text-xs">{selectedUser.email}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Estado</span><span className={`font-medium ${selectedUser.online ? "text-green-600" : "text-slate-400"}`}>{selectedUser.online ? "En línea" : "Desconectado"}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Miembro desde</span><span className="font-medium text-slate-900">{selectedUser.memberSince}</span></div>
+            </div>
+            <div className="bg-slate-50 rounded-xl p-3">
+              <p className="text-xs font-semibold text-slate-600 mb-2">Permisos del rol</p>
+              <div className="grid grid-cols-2 gap-1">
+                {(() => {
+                  const role = getRole(selectedUser.role);
+                  if (!role) return null;
+                  const perms: { key: string; label: string }[] = [
+                    { key: "canSOS", label: "SOS" },
+                    { key: "canReport", label: "Reportar" },
+                    { key: "canViewAlerts", label: "Ver Alertas" },
+                    { key: "canManageAlerts", label: "Gestionar Alertas" },
+                    { key: "canViewMap", label: "Ver Mapa" },
+                    { key: "canManageUsers", label: "Gestionar Usuarios" },
+                    { key: "canViewStats", label: "Ver Estadísticas" },
+                    { key: "canAssignGuards", label: "Asignar Guardias" },
+                  ];
+                  return perms.map((p) => (
+                    <div key={p.key} className="flex items-center gap-1.5">
+                      <div className={`w-2 h-2 rounded-full ${role.permissions[p.key as keyof typeof role.permissions] ? "bg-green-500" : "bg-slate-300"}`} />
+                      <span className="text-[10px] text-slate-600">{p.label}</span>
+                    </div>
+                  ));
+                })()}
+              </div>
+            </div>
+            {currentRole.permissions.canManageUsers && (
+              <Button className="w-full bg-[#0f4c81] hover:bg-[#0a3a63] text-white rounded-xl" onClick={() => { setShowRoleSelector(!showRoleSelector); }}>
+                Cambiar Rol
+              </Button>
+            )}
+            {currentRole.permissions.canManageRoles && (
+              <Button className="w-full bg-red-50 text-red-600 hover:bg-red-100 rounded-xl border border-red-200">
+                Eliminar Usuario
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => setSelectedUser(null)} className="w-full rounded-xl">Cerrar</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TAB 6: ADMIN (Admin/Comité/Super Admin)
+   ═══════════════════════════════════════════════════════════ */
+
+function AdminTab({ currentRole }: { currentRole: Role }) {
+  return (
+    <div className="space-y-5 pb-4 animate-fade-in">
+      <div>
+        <h1 className="text-xl font-bold text-slate-900">Panel de Administración</h1>
+        <p className="text-sm text-slate-500 mt-1">Servicios Integrales CyJ</p>
+      </div>
+
+      {/* Stats Cards */}
+      {currentRole.permissions.canViewStats && (
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { label: "Total Residentes", value: String(communityStats.totalMembers), color: "bg-[#0f4c81]/5 text-[#0f4c81]", icon: Users },
+            { label: "Guardias Activos", value: `${communityStats.guardsOnDuty}/12`, color: "bg-green-50 text-green-700", icon: Shield },
+            { label: "Alertas Hoy", value: "15", color: "bg-amber-50 text-amber-700", icon: AlertCircle },
+            { label: "Reportes Pendientes", value: String(communityStats.pendingReports), color: "bg-red-50 text-red-700", icon: FileText },
+          ].map((s) => (
+            <div key={s.label} className={`${s.color} rounded-xl p-4`}>
+              <s.icon className="w-5 h-5 opacity-60 mb-1" />
+              <div className="text-2xl font-bold">{s.value}</div>
+              <div className="text-[10px] opacity-70 font-medium">{s.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Towers Section */}
+      {currentRole.permissions.canManageFacilities && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-bold text-slate-900">Torres</h2>
+            <span className="text-xs text-slate-400">{communityStats.towers} torres • {communityStats.totalUnits} unidades</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {towers.map((t) => (
+              <div key={t.id} className="bg-white rounded-xl border border-slate-200 p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-slate-900">{t.name}</h3>
+                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${t.status === "operativa" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                    {t.status === "operativa" ? "Operativa" : "Mantención"}
+                  </span>
+                </div>
+                <div className="text-xs text-slate-500">
+                  <p>{t.units} unidades • {t.floors} pisos</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Guards Section */}
+      {currentRole.permissions.canAssignGuards && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-bold text-slate-900">Guardias</h2>
+            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs h-7">
+              <Plus className="w-3 h-3 mr-1" /> Asignar Turno
+            </Button>
+          </div>
+          <div className="space-y-2">
+            {guardsOnDuty.map((g) => (
+              <div key={g.id} className="bg-white rounded-xl border border-slate-200 p-3 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center text-green-700">
+                  <BadgeCheck className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-slate-900 truncate">{g.name}</p>
+                  <p className="text-[11px] text-slate-400">{g.shift} • {g.startTime} - {g.endTime}</p>
+                </div>
+                <span className="text-[10px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{g.zone}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Reports Section */}
+      {currentRole.permissions.canViewReports && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-bold text-slate-900">Reportes</h2>
+            <button className="text-xs text-[#0f4c81] font-medium">Ver Todos</button>
+          </div>
+          <div className="space-y-2">
+            {mockAlerts.slice(0, 4).map((a) => (
+              <div key={a.id} className="bg-white rounded-xl border border-slate-200 p-3 flex items-start gap-3">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${a.status === "activa" ? "bg-red-100 text-red-600" : a.status === "en_revision" ? "bg-amber-100 text-amber-600" : "bg-green-100 text-green-600"}`}>
+                  <CategoryIcon name={a.categoryIcon} size={16} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-slate-900 truncate">{a.title}</p>
+                  <p className="text-[10px] text-slate-400">{a.time} • {a.location}</p>
+                </div>
+                <Badge variant="outline" className={`text-[9px] px-1.5 py-0 border-0 flex-shrink-0 ${getStatusColor(a.status)}`}>
+                  {a.status === "activa" ? "Activa" : a.status === "en_revision" ? "Revisión" : "Resuelta"}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Announcements Section */}
+      {currentRole.permissions.canPostAnnouncements && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-bold text-slate-900">Anuncios</h2>
+            <Button size="sm" className="bg-[#0f4c81] hover:bg-[#0a3a63] text-white rounded-lg text-xs h-7">
+              <Plus className="w-3 h-3 mr-1" /> Crear
+            </Button>
+          </div>
+          <div className="space-y-2">
+            {announcements.map((a) => (
+              <div key={a.id} className="bg-white rounded-xl border border-slate-200 p-3 space-y-1">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-slate-900 truncate">{a.title}</p>
+                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${a.priority === "important" ? "bg-red-100 text-red-700" : a.priority === "warning" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
+                    {a.priority === "important" ? "Importante" : a.priority === "warning" ? "Aviso" : "Info"}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 line-clamp-2">{a.description}</p>
+                <p className="text-[10px] text-slate-400">{a.author} • {a.date}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TAB 7: PROFILE
+   ═══════════════════════════════════════════════════════════ */
+
+function ProfileTab({
+  currentUser,
+  currentRole,
+  onLogout,
+  onSwitchRole,
+}: {
+  currentUser: UserProfile;
+  currentRole: Role;
+  onLogout: () => void;
+  onSwitchRole: (user: UserProfile) => void;
+}) {
   const { toast } = useToast();
-  const [notifications, setNotifications] = useState({
-    sos: true,
-    reports: true,
-    updates: false,
-    community: true,
-  });
-  const [privacy, setPrivacy] = useState({
-    location: true,
-    profile: true,
-    anonymous: false,
-  });
+  const [notifications, setNotifications] = useState({ sos: true, reports: true, updates: false, community: true });
+  const [privacy, setPrivacy] = useState({ location: true, profile: true, anonymous: false });
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showRoleSelector, setShowRoleSelector] = useState(false);
 
   const handleSave = async () => {
     try {
-      const res = await fetch("/api/profile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notifications, privacy }),
-      });
+      const res = await fetch("/api/profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ notifications, privacy }) });
       const data = await res.json();
-      if (data.success) {
-        toast({ title: "Perfil actualizado", description: "Tus preferencias han sido guardadas." });
-      }
-    } catch {
-      toast({ title: "Error", description: "No se pudo guardar.", variant: "destructive" });
-    }
+      if (data.success) toast({ title: "Perfil actualizado", description: "Tus preferencias han sido guardadas." });
+    } catch { toast({ title: "Error", description: "No se pudo guardar.", variant: "destructive" }); }
   };
 
+  const permLabels: { key: keyof Role["permissions"]; label: string }[] = [
+    { key: "canSOS", label: "Botón SOS" },
+    { key: "canReport", label: "Reportar incidentes" },
+    { key: "canViewAlerts", label: "Ver alertas" },
+    { key: "canViewMap", label: "Ver mapa" },
+    { key: "canManageAlerts", label: "Gestionar alertas" },
+    { key: "canManageUsers", label: "Gestionar usuarios" },
+    { key: "canViewStats", label: "Ver estadísticas" },
+    { key: "canAssignGuards", label: "Asignar guardias" },
+  ];
+
   return (
-    <div className="space-y-5 pb-4">
+    <div className="space-y-5 pb-4 animate-fade-in">
       {/* Profile Header */}
       <div className="flex items-center gap-4">
-        <div className="relative">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-lg">
-            <span className="text-2xl font-bold text-white">{userProfile.avatarInitial}</span>
-          </div>
-          <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-2 border-white" />
+        <div className="relative w-16 h-16 rounded-2xl overflow-hidden shadow-lg">
+          <Image src="/download/logo-cyj.png" alt="CyJ" width={64} height={64} className="object-cover" />
         </div>
         <div>
-          <h1 className="text-lg font-bold text-slate-900">{userProfile.name}</h1>
-          <p className="text-sm text-blue-600 font-medium">{userProfile.role}</p>
-          <p className="text-xs text-slate-400">{userProfile.condo}</p>
+          <h1 className="text-lg font-bold text-slate-900">{currentUser.name}</h1>
+          <div className="flex items-center gap-2 mt-0.5">
+            <div className="px-2 py-0.5 rounded-full text-[10px] font-bold border" style={{ backgroundColor: currentRole.color + "20", color: currentRole.color, borderColor: currentRole.color + "40" }}>
+              <span className="inline-flex items-center gap-1"><RoleIcon icon={currentRole.icon} size={10} /> {currentRole.name}</span>
+            </div>
+          </div>
+          <p className="text-xs text-slate-400 mt-0.5">{currentUser.condo}</p>
         </div>
       </div>
 
       {/* Stats Row */}
       <div className="grid grid-cols-3 gap-2">
         {[
-          { value: userProfile.reports, label: "Reportes", color: "bg-blue-50 text-blue-700" },
-          { value: "Activa", label: "Comunidad", color: "bg-green-50 text-green-700" },
-          { value: userProfile.memberSince, label: "Miembro desde", color: "bg-purple-50 text-purple-700" },
-        ].map((stat) => (
-          <div key={stat.label} className={`${stat.color} rounded-xl p-3 text-center`}>
-            <div className="text-lg font-bold">{stat.value}</div>
-            <div className="text-[10px] mt-0.5 opacity-70">{stat.label}</div>
+          { value: currentUser.reports, label: "Reportes", color: "bg-blue-50 text-blue-700" },
+          { value: currentUser.familyMembers, label: "Familiares", color: "bg-green-50 text-green-700" },
+          { value: currentUser.memberSince, label: "Miembro desde", color: "bg-purple-50 text-purple-700" },
+        ].map((s) => (
+          <div key={s.label} className={`${s.color} rounded-xl p-3 text-center`}>
+            <div className="text-lg font-bold">{s.value}</div>
+            <div className="text-[10px] mt-0.5 opacity-70">{s.label}</div>
           </div>
         ))}
       </div>
@@ -993,35 +1203,34 @@ function ProfileTab() {
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <h3 className="px-4 py-3 text-sm font-bold text-slate-900 bg-slate-50 border-b border-slate-100">Datos Personales</h3>
         {[
-          { icon: User, label: "Nombre", value: userProfile.name },
-          { icon: Phone, label: "Teléfono", value: userProfile.phone },
-          { icon: Mail, label: "Email", value: userProfile.email },
-          { icon: MapPin, label: "Dirección", value: userProfile.address },
+          { icon: User, label: "Nombre", value: currentUser.name },
+          { icon: Phone, label: "Teléfono", value: currentUser.phone },
+          { icon: Mail, label: "Email", value: currentUser.email },
+          { icon: MapPin, label: "Dirección", value: currentUser.address },
         ].map((item) => (
           <div key={item.label} className="flex items-center justify-between px-4 py-3 border-b border-slate-100 last:border-0">
-            <div className="flex items-center gap-3">
-              <item.icon className="w-4 h-4 text-slate-400" />
-              <span className="text-xs text-slate-500">{item.label}</span>
-            </div>
+            <div className="flex items-center gap-3"><item.icon className="w-4 h-4 text-slate-400" /><span className="text-xs text-slate-500">{item.label}</span></div>
             <span className="text-sm text-slate-900 font-medium">{item.value}</span>
           </div>
         ))}
       </div>
 
-      {/* Family */}
-      <button className="w-full bg-white rounded-xl border border-slate-200 p-4 flex items-center justify-between active:bg-slate-50">
-        <div className="flex items-center gap-3">
-          <Users className="w-5 h-5 text-slate-500" />
-          <div className="text-left">
-            <span className="text-sm font-medium text-slate-700">Familiares</span>
-            <p className="text-[11px] text-slate-400">Administrar familiares autorizados</p>
+      {/* Family (for residente_p) */}
+      {currentUser.role === "residente_p" && (
+        <button className="w-full bg-white rounded-xl border border-slate-200 p-4 flex items-center justify-between active:bg-slate-50">
+          <div className="flex items-center gap-3">
+            <Heart className="w-5 h-5 text-slate-500" />
+            <div className="text-left">
+              <span className="text-sm font-medium text-slate-700">Mi Familia</span>
+              <p className="text-[11px] text-slate-400">Administrar familiares autorizados</p>
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-full">3</span>
-          <ChevronRight className="w-4 h-4 text-slate-400" />
-        </div>
-      </button>
+          <div className="flex items-center gap-2">
+            <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-full">{currentUser.familyMembers}</span>
+            <ChevronRight className="w-4 h-4 text-slate-400" />
+          </div>
+        </button>
+      )}
 
       {/* Notifications */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -1033,14 +1242,8 @@ function ProfileTab() {
           { key: "community" as const, label: "Comunidad", desc: "Noticias y avisos generales" },
         ].map((item) => (
           <div key={item.key} className="flex items-center justify-between px-4 py-3 border-b border-slate-100 last:border-0">
-            <div>
-              <span className="text-sm font-medium text-slate-700">{item.label}</span>
-              <p className="text-[11px] text-slate-400">{item.desc}</p>
-            </div>
-            <Switch
-              checked={notifications[item.key]}
-              onCheckedChange={(v) => setNotifications({ ...notifications, [item.key]: v })}
-            />
+            <div><span className="text-sm font-medium text-slate-700">{item.label}</span><p className="text-[11px] text-slate-400">{item.desc}</p></div>
+            <Switch checked={notifications[item.key]} onCheckedChange={(v) => setNotifications({ ...notifications, [item.key]: v })} />
           </div>
         ))}
       </div>
@@ -1054,214 +1257,210 @@ function ProfileTab() {
           { key: "anonymous" as const, label: "Reportes anónimos", desc: "Ocultar mi nombre en reportes" },
         ].map((item) => (
           <div key={item.key} className="flex items-center justify-between px-4 py-3 border-b border-slate-100 last:border-0">
-            <div>
-              <span className="text-sm font-medium text-slate-700">{item.label}</span>
-              <p className="text-[11px] text-slate-400">{item.desc}</p>
-            </div>
-            <Switch
-              checked={privacy[item.key]}
-              onCheckedChange={(v) => setPrivacy({ ...privacy, [item.key]: v })}
-            />
+            <div><span className="text-sm font-medium text-slate-700">{item.label}</span><p className="text-[11px] text-slate-400">{item.desc}</p></div>
+            <Switch checked={privacy[item.key]} onCheckedChange={(v) => setPrivacy({ ...privacy, [item.key]: v })} />
           </div>
         ))}
       </div>
 
-      {/* Community info */}
+      {/* My Role */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <h3 className="px-4 py-3 text-sm font-bold text-slate-900 bg-slate-50 border-b border-slate-100">Mi Rol</h3>
+        <div className="p-4 space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: currentRole.color }}>
+              <RoleIcon icon={currentRole.icon} size={20} />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-slate-900">{currentRole.name}</p>
+              <p className="text-[11px] text-slate-500">{currentRole.description}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            {permLabels.map((p) => (
+              <div key={p.key} className="flex items-center gap-1.5">
+                <div className={`w-2 h-2 rounded-full ${currentRole.permissions[p.key] ? "bg-green-500" : "bg-slate-300"}`} />
+                <span className={`text-[10px] ${currentRole.permissions[p.key] ? "text-slate-700" : "text-slate-400"}`}>{p.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Community */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <h3 className="px-4 py-3 text-sm font-bold text-slate-900 bg-slate-50 border-b border-slate-100">Comunidad</h3>
         <div className="px-4 py-3 border-b border-slate-100 flex justify-between">
           <span className="text-xs text-slate-500">Condominio</span>
-          <span className="text-sm text-slate-900 font-medium">{userProfile.condo}</span>
+          <span className="text-sm text-slate-900 font-medium">{currentUser.condo}</span>
+        </div>
+        <div className="px-4 py-3 border-b border-slate-100 flex justify-between">
+          <span className="text-xs text-slate-500">Torre / Unidad</span>
+          <span className="text-sm text-slate-900 font-medium">Torre {currentUser.tower} - U.{currentUser.unit}</span>
         </div>
         <div className="px-4 py-3 border-b border-slate-100 flex justify-between">
           <span className="text-xs text-slate-500">Rol</span>
-          <span className="text-sm text-slate-900 font-medium">{userProfile.role}</span>
+          <span className="text-sm font-medium" style={{ color: currentRole.color }}>{currentRole.name}</span>
         </div>
         <div className="px-4 py-3 flex justify-between">
           <span className="text-xs text-slate-500">Admin</span>
-          <span className="text-sm text-blue-600 font-medium">admin@losrobles.cl</span>
+          <span className="text-sm text-[#0f4c81] font-medium">admin@cyj.cl</span>
         </div>
       </div>
 
-      {/* Action buttons */}
+      {/* Actions */}
       <div className="space-y-2">
-        <button
-          onClick={() => toast({ title: "Compartir", description: "Enlace copiado al portapapeles" })}
-          className="w-full bg-green-50 text-green-700 rounded-xl p-4 flex items-center gap-3 active:bg-green-100 transition-colors"
-        >
-          <Share2 className="w-5 h-5" />
-          <span className="text-sm font-semibold">Compartir App</span>
+        <button onClick={() => toast({ title: "Compartir", description: "Enlace copiado al portapapeles" })} className="w-full bg-green-50 text-green-700 rounded-xl p-4 flex items-center gap-3 active:bg-green-100 transition-colors">
+          <Share2 className="w-5 h-5" /><span className="text-sm font-semibold">Compartir App</span>
         </button>
-        <button
-          onClick={() => toast({ title: "Centro de Ayuda", description: "Próximamente disponible" })}
-          className="w-full bg-white border border-slate-200 rounded-xl p-4 flex items-center gap-3 active:bg-slate-50 transition-colors"
-        >
-          <HelpCircle className="w-5 h-5 text-slate-600" />
-          <span className="text-sm font-medium text-slate-700">Centro de Ayuda</span>
-          <ChevronRight className="w-4 h-4 text-slate-400 ml-auto" />
+        <button onClick={() => toast({ title: "Centro de Ayuda", description: "Próximamente disponible" })} className="w-full bg-white border border-slate-200 rounded-xl p-4 flex items-center gap-3 active:bg-slate-50 transition-colors">
+          <HelpCircle className="w-5 h-5 text-slate-600" /><span className="text-sm font-medium text-slate-700">Centro de Ayuda</span><ChevronRight className="w-4 h-4 text-slate-400 ml-auto" />
         </button>
         <button className="w-full bg-white border border-slate-200 rounded-xl p-4 flex items-center gap-3 active:bg-slate-50 transition-colors">
-          <FileText className="w-5 h-5 text-slate-600" />
-          <span className="text-sm font-medium text-slate-700">Términos y Condiciones</span>
-          <ChevronRight className="w-4 h-4 text-slate-400 ml-auto" />
+          <FileText className="w-5 h-5 text-slate-600" /><span className="text-sm font-medium text-slate-700">Términos y Condiciones</span><ChevronRight className="w-4 h-4 text-slate-400 ml-auto" />
         </button>
       </div>
 
-      {/* Save button */}
-      <Button onClick={handleSave} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-5 rounded-xl">
-        Guardar Cambios
-      </Button>
+      {/* Switch Role (Demo) */}
+      <button onClick={() => setShowRoleSelector(!showRoleSelector)} className="w-full bg-[#0f4c81]/5 border border-[#0f4c81]/20 text-[#0f4c81] rounded-xl p-4 flex items-center justify-center gap-2 active:bg-[#0f4c81]/10 transition-colors">
+        <Crown className="w-5 h-5" /><span className="text-sm font-semibold">Cambiar Rol (Demo)</span>
+      </button>
+
+      {showRoleSelector && (
+        <div className="space-y-2 animate-fade-in">
+          <p className="text-xs font-semibold text-slate-500 text-center">Selecciona una cuenta de demostración</p>
+          {demoAccounts.map((account) => {
+            const role = getRole(account.role);
+            return (
+              <button key={account.role} onClick={() => { onSwitchRole(account); setShowRoleSelector(false); toast({ title: "Rol cambiado", description: `Ahora eres ${account.roleName}` }); }} className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-white active:bg-slate-50 transition-colors">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm" style={{ backgroundColor: role?.color || "#64748b" }}>{account.avatarInitial}</div>
+                <div className="flex-1 text-left">
+                  <p className="text-sm font-semibold text-slate-900">{account.name}</p>
+                  <p className="text-[11px] text-slate-400">{account.roleName}</p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Save */}
+      <Button onClick={handleSave} className="w-full bg-[#0f4c81] hover:bg-[#0a3a63] text-white py-5 rounded-xl">Guardar Cambios</Button>
 
       {/* Logout */}
-      <button
-        onClick={() => setShowLogoutConfirm(true)}
-        className="w-full border-2 border-red-200 text-red-600 rounded-xl p-4 flex items-center justify-center gap-2 active:bg-red-50 transition-colors"
-      >
-        <LogOut className="w-5 h-5" />
-        <span className="text-sm font-semibold">Cerrar Sesión</span>
+      <button onClick={() => setShowLogoutConfirm(true)} className="w-full border-2 border-red-200 text-red-600 rounded-xl p-4 flex items-center justify-center gap-2 active:bg-red-50 transition-colors">
+        <LogOut className="w-5 h-5" /><span className="text-sm font-semibold">Cerrar Sesión</span>
       </button>
 
       {showLogoutConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={() => setShowLogoutConfirm(false)} />
-          <div className="relative bg-white rounded-2xl w-[85%] max-w-sm p-6 space-y-4">
+          <div className="relative bg-white rounded-2xl w-[85%] max-w-sm p-6 space-y-4 animate-fade-in">
             <div className="text-center space-y-2">
-              <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto">
-                <LogOut className="w-7 h-7 text-red-600" />
-              </div>
+              <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto"><LogOut className="w-7 h-7 text-red-600" /></div>
               <h3 className="text-lg font-bold text-slate-900">¿Cerrar sesión?</h3>
               <p className="text-sm text-slate-500">No recibirás más alertas de la comunidad</p>
             </div>
             <div className="space-y-2">
-              <Button
-                onClick={() => {
-                  setShowLogoutConfirm(false);
-                  toast({ title: "Sesión cerrada", description: "Has cerrado sesión exitosamente" });
-                }}
-                className="w-full bg-red-600 hover:bg-red-700 text-white rounded-xl"
-              >
-                Cerrar Sesión
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setShowLogoutConfirm(false)}
-                className="w-full rounded-xl"
-              >
-                Cancelar
-              </Button>
+              <Button onClick={() => { setShowLogoutConfirm(false); onLogout(); }} className="w-full bg-red-600 hover:bg-red-700 text-white rounded-xl">Cerrar Sesión</Button>
+              <Button variant="outline" onClick={() => setShowLogoutConfirm(false)} className="w-full rounded-xl">Cancelar</Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Version */}
-      <p className="text-center text-[10px] text-slate-300 pb-2">VigilApp v2.1.0 • Hecho con <Heart className="w-3 h-3 inline text-red-400" /> en Chile</p>
+      <p className="text-center text-[10px] text-slate-300 pb-2">Servicios Integrales CyJ v2.1.0 • Hecho con <Heart className="w-3 h-3 inline text-red-400" /> en Chile</p>
     </div>
   );
 }
 
 /* ═══════════════════════════════════════════════════════════
-   MAIN PAGE COMPONENT
+   MAIN PAGE
    ═══════════════════════════════════════════════════════════ */
 
 export default function HomePage() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [currentRole, setCurrentRole] = useState<RoleId>("residente_p");
+  const [currentUser, setCurrentUser] = useState<UserProfile>(demoAccounts[0]);
   const [activeTab, setActiveTab] = useState<TabId>("home");
   const [sosActive, setSosActive] = useState(false);
+
+  const role = useMemo(() => getRole(currentRole), [currentRole]);
+  const visibleTabs = useMemo(() => {
+    if (!role) return ALL_TABS.filter((t) => t.id === "profile");
+    return ALL_TABS.filter((t) => t.required(role));
+  }, [role]);
+
+  const handleLogin = useCallback((user: UserProfile) => {
+    setCurrentUser(user);
+    setCurrentRole(user.role);
+    setActiveTab("home");
+    setIsLoggedIn(true);
+  }, []);
+
+  const handleLogout = useCallback(() => {
+    setIsLoggedIn(false);
+    setActiveTab("home");
+    setSosActive(false);
+  }, []);
+
+  const handleSwitchRole = useCallback((user: UserProfile) => {
+    setCurrentUser(user);
+    setCurrentRole(user.role);
+    setActiveTab("home");
+  }, []);
 
   const handleNavigate = useCallback((tab: TabId) => {
     setActiveTab(tab);
   }, []);
 
   const renderTabContent = () => {
+    if (!role) return null;
     switch (activeTab) {
-      case "home":
-        return <HomeTab onNavigate={handleNavigate} onSOSActivate={() => setSosActive(true)} />;
-      case "report":
-        return <ReportTab onNavigate={handleNavigate} />;
-      case "map":
-        return <MapTab />;
-      case "alerts":
-        return <AlertsTab />;
-      case "profile":
-        return <ProfileTab />;
-      default:
-        return null;
+      case "home": return <HomeTab currentUser={currentUser} currentRole={role} onNavigate={handleNavigate} onSOSActivate={() => setSosActive(true)} />;
+      case "report": return <ReportTab onNavigate={handleNavigate} />;
+      case "map": return <MapTab />;
+      case "alerts": return <AlertsTab />;
+      case "roles": return <RolesTab currentUser={currentUser} currentRole={role} />;
+      case "admin": return <AdminTab currentRole={role} />;
+      case "profile": return <ProfileTab currentUser={currentUser} currentRole={role} onLogout={handleLogout} onSwitchRole={handleSwitchRole} />;
+      default: return null;
     }
   };
 
+  // Login screen
+  if (!isLoggedIn) {
+    return <LoginScreen onLogin={handleLogin} />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-100 flex justify-center">
-      {/* Phone frame on desktop */}
       <div className="w-full max-w-md bg-slate-50 min-h-screen relative flex flex-col shadow-none md:shadow-2xl md:rounded-[2.5rem] md:border md:border-slate-200 overflow-hidden">
-        {/* Status bar */}
-        <div className="bg-gradient-to-r from-blue-800 to-blue-600 px-6 pt-3 pb-4 flex-shrink-0">
-          <div className="flex items-center justify-between text-white/80">
-            <span className="text-[10px] font-medium">9:41</span>
-            <div className="flex items-center gap-1.5">
-              <div className="flex items-end gap-0.5">
-                <div className="w-1 h-1.5 bg-white/80 rounded-sm" />
-                <div className="w-1 h-2.5 bg-white/80 rounded-sm" />
-                <div className="w-1 h-3 bg-white/80 rounded-sm" />
-                <div className="w-1 h-4 bg-white/60 rounded-sm" />
-              </div>
-              <svg width="14" height="10" viewBox="0 0 14 10" fill="currentColor" className="opacity-80 ml-1">
-                <path d="M1 8.5h12v1H1zm1-3h10v1H2zm1-3h8v1H3z" />
-                <rect x="0" y="7" width="3" height="3" rx="0.5" fill="currentColor" />
-                <rect x="4" y="4" width="3" height="6" rx="0.5" fill="currentColor" />
-                <rect x="8" y="1" width="3" height="9" rx="0.5" fill="currentColor" />
-              </svg>
-            </div>
-          </div>
-          {/* App bar */}
-          <div className="flex items-center justify-between mt-2">
-            <div className="flex items-center gap-2">
-              <Shield className="w-5 h-5 text-white" />
-              <span className="text-white font-bold text-base">VigilApp</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-              <span className="text-[11px] text-white/70">En línea</span>
-            </div>
-          </div>
-        </div>
+        {/* Top Bar */}
+        <TopBar currentUser={currentUser} currentRole={role!} onNavigate={handleNavigate} />
 
         {/* Tab content */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide">
-          <div className="p-4 pt-4">
-            {renderTabContent()}
-          </div>
+          <div className="p-4 pt-4">{renderTabContent()}</div>
         </div>
 
         {/* Bottom Navigation */}
         <div className="flex-shrink-0 bg-white border-t border-slate-200 pb-[env(safe-area-inset-bottom)]">
-          <div className="flex items-center justify-around px-2 pt-2 pb-1">
-            {TABS.map((tab) => {
+          <div className="flex items-center justify-around px-1 pt-2 pb-1">
+            {visibleTabs.map((tab) => {
               const isActive = activeTab === tab.id;
               return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl transition-all active:scale-95 min-w-[56px] ${
-                    isActive ? "text-blue-600" : "text-slate-400"
-                  }`}
-                >
-                  <div className={`p-1.5 rounded-xl transition-colors ${isActive ? "bg-blue-50" : ""}`}>
+                <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`relative flex flex-col items-center gap-0.5 py-1.5 px-2 rounded-xl transition-all active:scale-95 min-w-[48px] ${isActive ? "text-[#0f4c81]" : "text-slate-400"}`}>
+                  <div className={`p-1.5 rounded-xl transition-colors ${isActive ? "bg-[#0f4c81]/10" : ""}`}>
                     <tab.icon className={`w-5 h-5 transition-all ${isActive ? "stroke-[2.5]" : "stroke-[1.5]"}`} />
                   </div>
-                  <span className={`text-[10px] font-medium ${isActive ? "font-semibold" : ""}`}>
-                    {tab.label}
-                  </span>
-                  {tab.id === "alerts" && (
-                    <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-red-500 rounded-full" />
-                  )}
+                  <span className={`text-[9px] font-medium ${isActive ? "font-semibold" : ""}`}>{tab.label}</span>
+                  {tab.id === "alerts" && <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-red-500 rounded-full" />}
                 </button>
               );
             })}
           </div>
-          {/* Home indicator bar */}
-          <div className="flex justify-center pb-1.5">
-            <div className="w-32 h-1 bg-slate-200 rounded-full" />
-          </div>
+          <div className="flex justify-center pb-1.5"><div className="w-32 h-1 bg-slate-200 rounded-full" /></div>
         </div>
       </div>
 

@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(
-      { message: 'Solicitud enviada correctamente', id: submission.id },
+      { message: 'Solicitud enviada correctamente - Servicios Integrales CyJ', id: submission.id },
       { status: 201 }
     );
   } catch {

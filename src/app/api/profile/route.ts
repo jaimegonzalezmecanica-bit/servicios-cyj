@@ -8,9 +8,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       profile: {
-        name: name || "María González",
+        name: name || "Carlos Pérez",
         phone: phone || "+56 9 1234 5678",
-        email: email || "maria.gonzalez@email.com",
+        email: email || "carlos.perez@email.com",
         notifications: notifications || {},
         privacy: privacy || {},
         updatedAt: new Date().toISOString(),

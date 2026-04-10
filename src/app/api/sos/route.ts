@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
       sosActive: true,
       userId: userId || "default",
       activatedAt: new Date().toISOString(),
-      message: "Alerta SOS activada exitosamente",
+      message: "Alerta SOS activada exitosamente - Servicios Integrales CyJ",
     });
   } catch {
     return NextResponse.json(

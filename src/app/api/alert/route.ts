@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { mockAlerts } from "@/lib/mock-data";
 
 export async function POST(request: NextRequest) {
   try {
@@ -42,6 +41,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET() {
+  const { mockAlerts } = await import("@/lib/mock-data");
   return NextResponse.json({
     alerts: mockAlerts,
   });

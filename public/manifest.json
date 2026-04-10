@@ -1,11 +1,11 @@
 {
-  "name": "VigilApp - Seguridad Comunitaria",
-  "short_name": "VigilApp",
-  "description": "Botón de pánico y alarma comunitaria",
+  "name": "Servicios Integrales CyJ",
+  "short_name": "CyJ Seg",
+  "description": "Plataforma de seguridad comunitaria para gestión de 722+ residentes",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",
-  "theme_color": "#1e40af",
+  "theme_color": "#0f4c81",
   "orientation": "portrait",
   "icons": [
     { "src": "/download/icon-192.png", "sizes": "192x192", "type": "image/png" },
