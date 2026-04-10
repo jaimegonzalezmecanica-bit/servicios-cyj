@@ -1,14 +1,103 @@
 {
   "name": "Servicios Integrales CyJ",
   "short_name": "CyJ Seg",
-  "description": "Plataforma de seguridad comunitaria para gestión de 722+ residentes",
+  "description": "Plataforma de seguridad comunitaria para gestion de 722+ residentes",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",
   "theme_color": "#0f4c81",
   "orientation": "portrait",
+  "scope": "/",
+  "lang": "es",
+  "dir": "ltr",
+  "categories": ["security", "utilities", "lifestyle"],
+  "prefer_related_applications": false,
   "icons": [
-    { "src": "/download/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/download/icon-512.png", "sizes": "512x512", "type": "image/png" }
+    {
+      "src": "/download/icon-72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/download/icon-96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/download/icon-128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/download/icon-144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/download/icon-152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/download/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/download/icon-384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/download/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/download/icon-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/download/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Servicios Integrales CyJ - Seguridad Comunitaria"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Activar SOS",
+      "short_name": "SOS",
+      "description": "Activar alerta de emergencia",
+      "url": "/?action=sos",
+      "icons": [{ "src": "/download/icon-96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Reportar Incidente",
+      "short_name": "Reportar",
+      "description": "Reportar un nuevo incidente",
+      "url": "/?action=report",
+      "icons": [{ "src": "/download/icon-96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Ver Alertas",
+      "short_name": "Alertas",
+      "description": "Ver alertas comunitarias",
+      "url": "/?action=alerts",
+      "icons": [{ "src": "/download/icon-96.png", "sizes": "96x96" }]
+    }
   ]
 }

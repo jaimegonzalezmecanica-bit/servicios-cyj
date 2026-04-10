@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Image from "next/image";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -53,6 +53,9 @@ import {
   Megaphone,
   Calendar,
   Wrench,
+  Smartphone,
+  Download,
+  X,
 } from "lucide-react";
 import {
   mockAlerts,
@@ -169,6 +172,181 @@ function InfoIcon() {
     </svg>
   );
 }
+
+/* ═══════════════════════════════════════════════════════════
+   PWA INSTALL BANNER
+   ═══════════════════════════════════════════════════════════ */
+
+function PWAInstallBanner({ onInstall, onDismiss }: { onInstall: () => void; onDismiss: () => void }) {
+  const isIOS = /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
+  const isStandalone = window.matchMedia("(display-mode: standalone)").matches;
+
+  if (isStandalone) return null;
+
+  return (
+    <div className="fixed top-0 left-0 right-0 z-[90] animate-slide-down">
+      <div className="bg-gradient-to-r from-[#0f4c81] to-[#0a3a63] px-4 py-3 flex items-center justify-between shadow-lg">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+            <Download className="w-5 h-5 text-white" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-white font-semibold text-sm">Instalar App en tu Celular</p>
+            <p className="text-blue-200 text-[11px]">Acceso rapido sin navegador</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <Button
+            onClick={onInstall}
+            className="bg-white text-[#0f4c81] hover:bg-blue-50 text-xs font-bold px-3 py-2 rounded-lg h-8 shadow-sm"
+          >
+            <Smartphone className="w-4 h-4 mr-1" />
+            Instalar
+          </Button>
+          <button
+            onClick={onDismiss}
+            className="text-white/60 hover:text-white p-1 active:scale-95"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+      {isIOS && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5">
+          <p className="text-[11px] text-amber-800 text-center">
+            <span className="font-semibold">iOS:</span> Toca el boton Compartir &rarr; &quot;Agregar a Inicio&quot;
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   INSTALL GUIDE MODAL
+   ═══════════════════════════════════════════════════════════ */
+
+function InstallGuide({ onClose }: { onClose: () => void }) {
+  const isIOS = /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
+  const isAndroid = /android/.test(navigator.userAgent.toLowerCase());
+
+  return (
+    <div className="fixed inset-0 z-[95] flex items-end justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-white rounded-t-3xl w-full max-w-md p-6 pb-8 space-y-4 animate-slide-up max-h-[85vh] overflow-y-auto">
+        <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto" />
+        <div className="text-center space-y-2">
+          <div className="w-16 h-16 bg-[#0f4c81] rounded-2xl flex items-center justify-center mx-auto">
+            <Smartphone className="w-8 h-8 text-white" />
+          </div>
+          <h3 className="text-lg font-bold text-slate-900">Instalar en tu Celular</h3>
+          <p className="text-sm text-slate-500">Sigue estos pasos para tener la app como nativa</p>
+        </div>
+
+        {isAndroid ? (
+          <div className="space-y-3">
+            <div className="bg-blue-50 rounded-xl p-3 flex items-start gap-3">
+              <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">1</div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Abre en Chrome</p>
+                <p className="text-xs text-slate-500 mt-0.5">Visita esta pagina desde Google Chrome en tu Android</p>
+              </div>
+            </div>
+            <div className="bg-blue-50 rounded-xl p-3 flex items-start gap-3">
+              <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">2</div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Toca el menu de Chrome</p>
+                <p className="text-xs text-slate-500 mt-0.5">Pulsa los tres puntos (...) arriba a la derecha</p>
+              </div>
+            </div>
+            <div className="bg-blue-50 rounded-xl p-3 flex items-start gap-3">
+              <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">3</div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">&quot;Agregar a pantalla de inicio&quot;</p>
+                <p className="text-xs text-slate-500 mt-0.5">Selecciona esta opcion para crear el acceso directo</p>
+              </div>
+            </div>
+            <div className="bg-green-50 rounded-xl p-3 flex items-start gap-3">
+              <div className="w-6 h-6 bg-green-600 text-white rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">4</div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Listo!</p>
+p className="text-xs text-slate-500 mt-0.5">La app aparecera en tu pantalla principal como cualquier otra app</p>
+              </div>
+            </div>
+          </div>
+        ) : isIOS ? (
+          <div className="space-y-3">
+            <div className="bg-blue-50 rounded-xl p-3 flex items-start gap-3">
+              <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">1</div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Abre en Safari</p>
+                <p className="text-xs text-slate-500 mt-0.5">Visita esta pagina desde Safari en tu iPhone o iPad</p>
+              </div>
+            </div>
+            <div className="bg-blue-50 rounded-xl p-3 flex items-start gap-3">
+              <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">2</div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Toca el icono Compartir</p>
+                <p className="text-xs text-slate-500 mt-0.5">Pulsa el boton de compartir (cuadro con flecha) abajo</p>
+              </div>
+            </div>
+            <div className="bg-blue-50 rounded-xl p-3 flex items-start gap-3">
+              <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">3</div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">&quot;Agregar a pantalla de inicio&quot;</p>
+                <p className="text-xs text-slate-500 mt-0.5">Desplaza y selecciona esta opcion</p>
+              </div>
+            </div>
+            <div className="bg-green-50 rounded-xl p-3 flex items-start gap-3">
+              <div className="w-6 h-6 bg-green-600 text-white rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">4</div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Confirmar &quot;Agregar&quot;</p>
+                <p className="text-xs text-slate-500 mt-0.5">Presiona &quot;Agregar&quot; en el dialogo que aparece</p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="bg-blue-50 rounded-xl p-3 flex items-start gap-3">
+              <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">1</div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Abre en Chrome o Edge</p>
+                <p className="text-xs text-slate-500 mt-0.5">Visita desde un navegador compatible con PWA</p>
+              </div>
+            </div>
+            <div className="bg-blue-50 rounded-xl p-3 flex items-start gap-3">
+              <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">2</div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Busca el prompt de instalacion</p>
+                <p className="text-xs text-slate-500 mt-0.5">Aparecera un banner superior ofreciendo instalar la app</p>
+              </div>
+            </div>
+            <div className="bg-green-50 rounded-xl p-3 flex items-start gap-3">
+              <div className="w-6 h-6 bg-green-600 text-white rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">3</div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Presiona &quot;Instalar&quot;</p>
+                <p className="text-xs text-slate-500 mt-0.5">La app se instalara y aparecera en tu escritorio/inicio</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="bg-slate-50 rounded-xl p-3 text-center">
+          <p className="text-[11px] text-slate-500">
+            <span className="font-semibold text-[#0f4c81]">Ventajas de instalar:</span> Funciona sin internet, acceso rapido desde el inicio,
+            notificaciones push, experiencia nativa y sin barra del navegador.
+          </p>
+        </div>
+
+        <Button onClick={onClose} variant="outline" className="w-full py-5 rounded-xl text-base">
+          Entendido
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+const INSTALL_DISMISSED_KEY = "cyj-install-dismissed";
 
 /* ═══════════════════════════════════════════════════════════
    LOGIN SCREEN
@@ -1384,6 +1562,49 @@ export default function HomePage() {
   const [currentUser, setCurrentUser] = useState<UserProfile>(demoAccounts[0]);
   const [activeTab, setActiveTab] = useState<TabId>("home");
   const [sosActive, setSosActive] = useState(false);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const [showInstallGuide, setShowInstallGuide] = useState(false);
+  const deferredPrompt = useRef<any>(null);
+
+  // PWA install prompt
+  useEffect(() => {
+    const dismissed = localStorage.getItem(INSTALL_DISMISSED_KEY);
+    const isStandalone = window.matchMedia("(display-mode: standalone)").matches;
+    if (!dismissed && !isStandalone) {
+      const timer = setTimeout(() => setShowInstallBanner(true), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  // Listen for beforeinstallprompt
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault();
+      deferredPrompt.current = e;
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  const handlePWAInstall = useCallback(() => {
+    if (deferredPrompt.current) {
+      deferredPrompt.current.prompt();
+      deferredPrompt.current.userChoice.then((choice: any) => {
+        if (choice.outcome === "accepted") {
+          console.log("CyJ App installed!");
+        }
+        deferredPrompt.current = null;
+      });
+    } else {
+      setShowInstallGuide(true);
+    }
+    setShowInstallBanner(false);
+  }, []);
+
+  const handleDismissBanner = useCallback(() => {
+    setShowInstallBanner(false);
+    localStorage.setItem(INSTALL_DISMISSED_KEY, "true");
+  }, []);
 
   const role = useMemo(() => getRole(currentRole), [currentRole]);
   const visibleTabs = useMemo(() => {
