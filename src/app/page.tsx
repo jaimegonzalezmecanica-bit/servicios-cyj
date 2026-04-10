@@ -1,1244 +1,1272 @@
 "use client";
 
-import React, { useState, useEffect, useRef, FormEvent } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import {
+  Shield,
   AlertTriangle,
-  MapPin,
   Map,
-  Smartphone,
-  Building2,
-  ShieldCheck,
-  Menu,
-  X,
-  ChevronDown,
-  Quote,
-  Mail,
-  Phone,
-  HelpCircle,
-  Star,
+  Bell,
+  User,
+  UserX,
+  Volume2,
+  Car,
+  ShieldAlert,
+  DoorOpen,
+  PawPrint,
+  Flame,
+  MoreHorizontal,
+  MapPin,
+  ChevronRight,
+  Camera,
   Send,
   CheckCircle2,
-  Download,
-  Facebook,
-  Instagram,
-  Twitter,
+  Clock,
+  MessageSquare,
+  Settings,
+  Users,
+  Flag,
+  X,
+  Phone,
+  Mail,
+  FileText,
+  HelpCircle,
+  Share2,
+  LogOut,
+  Heart,
+  Filter,
+  Plus,
+  XCircle,
 } from "lucide-react";
+import {
+  mockAlerts,
+  incidentMarkers,
+  reportCategories,
+  userProfile,
+  communityStats,
+  type Alert,
+  type IncidentMarker,
+} from "@/lib/mock-data";
 
-/* ─── Navigation Links ─── */
-const NAV_LINKS = [
-  { label: "Quiénes Somos", href: "#quienes-somos" },
-  { label: "Funcionalidades", href: "#funcionalidades" },
-  { label: "Galería", href: "#galeria" },
-  { label: "Testimonios", href: "#testimonios" },
-  { label: "Demo", href: "#demo" },
-  { label: "Precios", href: "#precios" },
-  { label: "Soporte", href: "#soporte" },
-  { label: "Contacto", href: "#contacto" },
-];
+/* ═══════════════════════════════════════════════════════════
+   TYPES
+   ═══════════════════════════════════════════════════════════ */
 
-/* ─── Features Data ─── */
-const FEATURES = [
-  {
-    icon: AlertTriangle,
-    title: "Botón SOS",
-    description:
-      "Activa una alerta de emergencia instantánea con un solo toque. Tu ubicación se envía automáticamente a la comunidad y autoridades.",
-  },
-  {
-    icon: MapPin,
-    title: "Reportes Georreferenciados",
-    description:
-      "Reporta incidentes con ubicación precisa. Todos los vecinos pueden visualizar y responder a eventos en tiempo real.",
-  },
-  {
-    icon: Map,
-    title: "Mapa de Incidentes",
-    description:
-      "Visualiza un mapa interactivo con todos los reportes de tu comunidad. Identifica zonas de mayor actividad.",
-  },
-  {
-    icon: Smartphone,
-    title: "Fácil de Usar",
-    description:
-      "Interfaz intuitiva diseñada para todos los miembros de la familia. Sin complicaciones, solo seguridad al alcance de tu mano.",
-  },
-  {
-    icon: Building2,
-    title: "Planes por Comunidad",
-    description:
-      "Planes flexibles adaptados al tamaño de tu comunidad. Desde 1 hasta más de 1000 usuarios, todos protegidos.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Seguridad Garantizada",
-    description:
-      "Tus datos están protegidos con encriptación de última generación. Privacidad y seguridad son nuestra prioridad.",
-  },
-];
+type TabId = "home" | "report" | "map" | "alerts" | "profile";
 
-/* ─── Gallery Data ─── */
-const GALLERY_ITEMS = [
-  {
-    image: "/download/gallery-sos.jpg",
-    title: "Botón SOS Inmediato",
-    description:
-      "Alerta de emergencia con un solo toque, enviando tu ubicación en tiempo real.",
-  },
-  {
-    image: "/download/gallery-reports.jpg",
-    title: "Reportes Inteligentes",
-    description:
-      "Categoriza y gestiona incidentes de forma eficiente con análisis automático.",
-  },
-  {
-    image: "/download/gallery-map.jpg",
-    title: "Mapa Interactivo",
-    description:
-      "Visualiza todos los incidentes de tu comunidad en un mapa en tiempo real.",
-  },
-  {
-    image: "/download/gallery-family.jpg",
-    title: "Seguridad Familiar",
-    description:
-      "Protege a los tuyos con herramientas diseñadas para toda la familia.",
-  },
-  {
-    image: "/download/gallery-geolocation.jpg",
-    title: "Geolocalización Precisa",
-    description:
-      "Ubicación exacta de cada incidente para una respuesta rápida y efectiva.",
-  },
-  {
-    image: "/download/gallery-security.jpg",
-    title: "Tranquilidad Total",
-    description:
-      "Vive con la tranquilidad de saber que tu comunidad está conectada y protegida.",
-  },
-];
-
-/* ─── Testimonials Data ─── */
-const TESTIMONIALS = [
-  {
-    text: "Desde que implementamos VigilApp en nuestro condominio, la sensación de seguridad aumentó notablemente. Los vecinos se sienten más conectados y protegidos.",
-    author: "María González",
-    role: "Administradora, Condominio Los Aromos",
-  },
-  {
-    text: "El botón SOS nos salvó en una situación de emergencia. La respuesta fue inmediata y todos en la comunidad pudieron colaborar. Totalmente recomendado.",
-    author: "Carlos Muñoz",
-    role: "Residente, Villa del Mar",
-  },
-];
-
-/* ─── FAQ Data ─── */
-const FAQ_ITEMS = [
-  {
-    question: "¿La app tiene costo?",
-    answer:
-      "VigilApp funciona bajo un modelo de suscripción mensual por comunidad. El costo depende de la cantidad de usuarios y se calcula en UF. Ofrecemos planes flexibles con tarifas decrecientes según el tamaño de la comunidad.",
-  },
-  {
-    question: "¿Quién puede usar la app?",
-    answer:
-      "Todos los residentes del condominio pueden descargar y usar VigilApp sin costo adicional. La suscripción la paga la comunidad o administración, y todos los vecinos tienen acceso completo a todas las funcionalidades.",
-  },
-  {
-    question: "¿Qué pasa si no tengo internet?",
-    answer:
-      "Las alertas SOS están optimizadas para funcionar incluso con baja conectividad. La app intentará enviar la alerta por múltiples canales y se encola automáticamente cuando se recupera la conexión a internet.",
-  },
-  {
-    question: "¿Está disponible en iPhone y Android?",
-    answer:
-      "Sí, VigilApp está disponible tanto en la App Store para dispositivos iPhone como en Google Play para dispositivos Android. Ambas versiones tienen las mismas funcionalidades completas.",
-  },
-];
-
-/* ─── Pricing Data ─── */
-const PRICING_TIERS = [
-  { range: "1-10", price: "0,025", label: "Plan básico", popular: false },
-  { range: "11-25", price: "0,024", label: "Comunidades pequeñas", popular: false },
-  { range: "26-50", price: "0,023", label: "Comunidades medianas", popular: false },
-  { range: "51-100", price: "0,022", label: "Plan intermedio", popular: true },
-  { range: "101-200", price: "0,021", label: "Plan avanzado", popular: false },
-  { range: "201-500", price: "0,020", label: "Plan plus", popular: false },
-  { range: "501-1000", price: "0,019", label: "Grandes comunidades", popular: false },
-  { range: "1001+", price: "0,018", label: "Plan especial", popular: false },
-];
-
-/* ─── WhatsApp SVG Icon ─── */
-function WhatsAppIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 32 32"
-      fill="currentColor"
-      className={className}
-    >
-      <path d="M16.004 0h-.008C7.174 0 0 7.176 0 16c0 3.5 1.128 6.744 3.046 9.378L1.054 31.29l6.118-1.96A15.924 15.924 0 0016.004 32C24.826 32 32 24.822 32 16S24.826 0 16.004 0zm9.31 22.598c-.39 1.1-1.932 2.014-3.168 2.28-.846.18-1.95.324-5.67-1.218-4.762-1.972-7.826-6.824-8.064-7.14-.228-.316-1.928-2.568-1.928-4.896s1.22-3.474 1.652-3.95c.432-.474.942-.594 1.258-.594.316 0 .632.002.908.016.292.016.682-.11 1.068.816.392.942 1.332 3.27 1.45 3.506.116.236.196.512.04.826-.158.316-.236.512-.472.788-.236.276-.496.616-.708.826-.236.236-.482.492-.206.964.276.472 1.228 2.026 2.638 3.282 1.812 1.616 3.34 2.118 3.814 2.354.472.236.748.196 1.024-.118.276-.316 1.18-1.376 1.496-1.85.316-.472.632-.392 1.064-.236.432.158 2.748 1.296 3.22 1.532.472.236.788.354.906.548.118.196.118 1.12-.272 2.22z" />
-    </svg>
-  );
+interface TabDef {
+  id: TabId;
+  label: string;
+  icon: React.ElementType;
 }
 
-/* ─── Shield Logo Component ─── */
-function ShieldLogo() {
-  return (
-    <svg
-      viewBox="0 0 40 44"
-      fill="none"
-      className="w-8 h-9"
-    >
-      <path
-        d="M20 2L4 10v12c0 11.1 6.84 21.5 16 24 9.16-2.5 16-12.9 16-24V10L20 2z"
-        fill="url(#shield-gradient)"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M15 22l4 4 7-8"
-        stroke="white"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <defs>
-        <linearGradient
-          id="shield-gradient"
-          x1="4"
-          y1="2"
-          x2="36"
-          y2="38"
-          gradientUnits="userSpaceOnUse"
-        >
-          <stop stopColor="#1e40af" />
-          <stop offset="1" stopColor="#3b82f6" />
-        </linearGradient>
-      </defs>
-    </svg>
-  );
+/* ═══════════════════════════════════════════════════════════
+   CONSTANTS
+   ═══════════════════════════════════════════════════════════ */
+
+const TABS: TabDef[] = [
+  { id: "home", label: "Inicio", icon: Shield },
+  { id: "report", label: "Reportar", icon: AlertTriangle },
+  { id: "map", label: "Mapa", icon: Map },
+  { id: "alerts", label: "Alertas", icon: Bell },
+  { id: "profile", label: "Perfil", icon: User },
+];
+
+const ALERT_FILTERS = ["Todas", "Activas", "Resueltas", "Mías"];
+
+const MAP_FILTERS = ["Todos", "Hoy", "Críticos", "Resueltos", "Mi zona"];
+
+/* ═══════════════════════════════════════════════════════════
+   HELPER: Category Icon Component
+   ═══════════════════════════════════════════════════════════ */
+
+function CategoryIcon({ name, size = 18, className = "" }: { name: string; size?: number; className?: string }) {
+  const props = { size, className };
+  switch (name) {
+    case "user-x":
+      return <UserX {...props} />;
+    case "volume-2":
+      return <Volume2 {...props} />;
+    case "car":
+      return <Car {...props} />;
+    case "shield-alert":
+      return <ShieldAlert {...props} />;
+    case "door-open":
+      return <DoorOpen {...props} />;
+    case "paw-print":
+      return <PawPrint {...props} />;
+    case "flame":
+      return <Flame {...props} />;
+    case "flag":
+      return <Flag {...props} />;
+    case "more-horizontal":
+      return <MoreHorizontal {...props} />;
+    default:
+      return <AlertTriangle {...props} />;
+  }
 }
 
-/* ─── Fade-in animation on scroll ─── */
-function useInView(threshold = 0.15) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [isVisible, setIsVisible] = useState(false);
+function getStatusColor(status: string) {
+  switch (status) {
+    case "activa":
+      return "border-red-500 bg-red-50 text-red-700";
+    case "en_revision":
+      return "border-amber-500 bg-amber-50 text-amber-700";
+    case "resuelta":
+      return "border-green-500 bg-green-50 text-green-700";
+    default:
+      return "border-slate-300 bg-slate-50 text-slate-700";
+  }
+}
+
+function getPriorityColor(priority: string) {
+  switch (priority) {
+    case "critical":
+      return "bg-red-600";
+    case "high":
+      return "bg-orange-500";
+    case "medium":
+      return "bg-amber-500";
+    case "low":
+      return "bg-blue-500";
+    default:
+      return "bg-slate-500";
+  }
+}
+
+function getSeverityColor(severity: string) {
+  switch (severity) {
+    case "critical":
+      return "#dc2626";
+    case "warning":
+      return "#f97316";
+    case "info":
+      return "#3b82f6";
+    default:
+      return "#64748b";
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SOS OVERLAY COMPONENT
+   ═══════════════════════════════════════════════════════════ */
+
+function SOSOverlay({ onCancel }: { onCancel: () => void }) {
+  const [countdown, setCountdown] = useState(30);
+  const [isHolding, setIsHolding] = useState(false);
 
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setIsVisible(true);
-          observer.unobserve(entry.target);
-        }
-      },
-      { threshold }
-    );
-    if (ref.current) observer.observe(ref.current);
-    return () => observer.disconnect();
-  }, [threshold]);
+    if (countdown <= 0) return;
+    const timer = setInterval(() => {
+      setCountdown((prev) => prev - 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [countdown]);
 
-  return { ref, isVisible };
-}
+  useEffect(() => {
+    if (isHolding) {
+      const timer = setTimeout(() => {
+        onCancel();
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [isHolding, onCancel]);
 
-function FadeIn({
-  children,
-  className = "",
-  delay = 0,
-}: {
-  children: React.ReactNode;
-  className?: string;
-  delay?: number;
-}) {
-  const { ref, isVisible } = useInView();
   return (
-    <div
-      ref={ref}
-      className={`transition-all duration-700 ease-out ${
-        isVisible
-          ? "opacity-100 translate-y-0"
-          : "opacity-0 translate-y-8"
-      } ${className}`}
-      style={{ transitionDelay: `${delay}ms` }}
-    >
-      {children}
+    <div className="fixed inset-0 z-[100] bg-gradient-to-br from-red-700 via-red-600 to-red-800 flex flex-col items-center justify-center text-white">
+      <div className="absolute inset-0 opacity-20">
+        <Image src="/download/sos-bg.png" alt="" fill className="object-cover" />
+      </div>
+
+      <div className="relative z-10 flex flex-col items-center gap-6 px-8">
+        {/* Pulse rings */}
+        <div className="relative">
+          <div className="absolute inset-0 w-32 h-32 rounded-full bg-red-400/30 animate-ping" />
+          <div className="absolute inset-0 w-32 h-32 rounded-full bg-red-400/20 animate-pulse" style={{ animationDelay: "0.5s" }} />
+          <div className="relative w-32 h-32 rounded-full bg-red-500 border-4 border-white/30 flex items-center justify-center">
+            <span className="text-5xl font-black tracking-wider">SOS</span>
+          </div>
+        </div>
+
+        <div className="text-center space-y-2">
+          <h2 className="text-2xl font-bold">ALERTA DE EMERGENCIA</h2>
+          <p className="text-red-100 text-sm">Tu ubicación ha sido compartida con la comunidad</p>
+        </div>
+
+        {/* Countdown */}
+        <div className="bg-black/20 rounded-2xl px-8 py-4 backdrop-blur-sm">
+          <div className="text-5xl font-mono font-bold tabular-nums">{countdown}s</div>
+          <p className="text-red-200 text-xs mt-1 text-center">Alerta activa</p>
+        </div>
+
+        <div className="w-full space-y-3">
+          <div className="bg-white/10 rounded-xl p-4 text-center backdrop-blur-sm">
+            <MapPin className="w-5 h-5 mx-auto mb-1 text-white/80" />
+            <p className="text-sm text-white/90">Ubicación enviada al administrador y guardias</p>
+          </div>
+        </div>
+
+        {/* Cancel button */}
+        <button
+          onMouseDown={() => setIsHolding(true)}
+          onMouseUp={() => setIsHolding(false)}
+          onMouseLeave={() => setIsHolding(false)}
+          onTouchStart={() => setIsHolding(true)}
+          onTouchEnd={() => setIsHolding(false)}
+          className={`mt-4 px-8 py-4 rounded-2xl text-base font-semibold transition-all ${
+            isHolding
+              ? "bg-white text-red-600 scale-95"
+              : "bg-white/10 text-white/80 border border-white/20"
+          }`}
+        >
+          {isHolding ? "Soltando... cancelando" : "Mantener presionado para cancelar"}
+        </button>
+      </div>
     </div>
   );
 }
 
-/* ═══════════════════════════════════════════════
-   MAIN PAGE COMPONENT
-   ═══════════════════════════════════════════════ */
-export default function HomePage() {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    condominio: "",
-    message: "",
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formSuccess, setFormSuccess] = useState(false);
+/* ═══════════════════════════════════════════════════════════
+   TAB 1: HOME (Inicio)
+   ═══════════════════════════════════════════════════════════ */
+
+function HomeTab({
+  onNavigate,
+  onSOSActivate,
+}: {
+  onNavigate: (tab: TabId) => void;
+  onSOSActivate: () => void;
+}) {
+  const [showSOSConfirm, setShowSOSConfirm] = useState(false);
   const { toast } = useToast();
+  const recentAlerts = mockAlerts.slice(0, 3);
 
-  /* ─── Scroll listener ─── */
-  useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 50);
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  /* ─── Smooth scroll handler ─── */
-  const scrollTo = (href: string) => {
-    const el = document.querySelector(href);
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth" });
-    }
-    setMobileMenuOpen(false);
+  const handleSOS = () => {
+    setShowSOSConfirm(false);
+    onSOSActivate();
+    toast({
+      title: "Alerta SOS Activada",
+      description: "Tu ubicación ha sido compartida con la comunidad.",
+    });
   };
 
-  /* ─── Form handler ─── */
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
+  return (
+    <div className="space-y-4 pb-4">
+      {/* Top Status Bar */}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm text-slate-500">Hola,</p>
+          <h1 className="text-lg font-bold text-slate-900">{userProfile.name}</h1>
+        </div>
+        <button
+          className="relative w-11 h-11 rounded-full bg-white shadow-md flex items-center justify-center"
+          onClick={() => onNavigate("alerts")}
+        >
+          <Bell className="w-5 h-5 text-slate-700" />
+          <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-red-500 rounded-full text-[10px] text-white font-bold flex items-center justify-center">
+            3
+          </span>
+        </button>
+      </div>
 
+      {/* Condo name */}
+      <div className="bg-blue-50 rounded-xl px-4 py-2 flex items-center gap-2">
+        <Shield className="w-4 h-4 text-blue-600" />
+        <span className="text-sm text-blue-700 font-medium">{userProfile.condo}</span>
+      </div>
+
+      {/* Safety Status Card */}
+      <div className="bg-gradient-to-r from-green-500 to-green-600 rounded-2xl p-5 text-white shadow-lg">
+        <div className="flex items-center gap-3">
+          <div className="w-3 h-3 bg-white rounded-full animate-pulse" />
+          <div>
+            <h2 className="text-lg font-bold">Tu comunidad está SEGURA</h2>
+            <p className="text-green-100 text-sm">No hay alertas activas en este momento</p>
+          </div>
+        </div>
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          <div className="bg-white/20 rounded-lg px-3 py-2 text-center">
+            <div className="text-lg font-bold">{communityStats.membersOnline}</div>
+            <div className="text-[10px] text-green-100">En línea</div>
+          </div>
+          <div className="bg-white/20 rounded-lg px-3 py-2 text-center">
+            <div className="text-lg font-bold">{communityStats.activeAlerts}</div>
+            <div className="text-[10px] text-green-100">Alertas</div>
+          </div>
+          <div className="bg-white/20 rounded-lg px-3 py-2 text-center">
+            <div className="text-lg font-bold">{communityStats.totalMembers}</div>
+            <div className="text-[10px] text-green-100">Miembros</div>
+          </div>
+        </div>
+      </div>
+
+      {/* SOS Button */}
+      <div className="flex justify-center py-4">
+        <button
+          onClick={() => setShowSOSConfirm(true)}
+          className="relative group"
+        >
+          <div className="absolute inset-0 w-[120px] h-[120px] rounded-full bg-red-400/30 animate-ping" />
+          <div className="absolute inset-0 w-[120px] h-[120px] rounded-full bg-red-400/20 animate-pulse" style={{ animationDelay: "0.5s" }} />
+          <div className="relative w-[120px] h-[120px] rounded-full bg-gradient-to-br from-red-500 to-red-700 shadow-xl shadow-red-500/30 flex items-center justify-center active:scale-95 transition-transform">
+            <div className="text-center">
+              <span className="text-3xl font-black text-white tracking-wider">SOS</span>
+              <p className="text-[9px] text-red-100 mt-0.5 font-medium">EMERGENCIA</p>
+            </div>
+          </div>
+        </button>
+      </div>
+
+      {/* SOS Confirmation Bottom Sheet */}
+      {showSOSConfirm && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowSOSConfirm(false)} />
+          <div className="relative bg-white rounded-t-3xl w-full max-w-md p-6 pb-8 space-y-4 animate-slide-up">
+            <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto" />
+            <div className="text-center space-y-2">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto">
+                <AlertTriangle className="w-8 h-8 text-red-600" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900">¿Activar alerta de emergencia?</h3>
+              <p className="text-sm text-slate-500">Tu ubicación actual será compartida con todos los miembros de la comunidad y el administrador.</p>
+            </div>
+            <div className="space-y-2">
+              <Button
+                onClick={handleSOS}
+                className="w-full bg-red-600 hover:bg-red-700 text-white py-6 text-base font-semibold rounded-xl"
+              >
+                Activar SOS
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowSOSConfirm(false)}
+                className="w-full py-5 text-base rounded-xl"
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Action Buttons */}
+      <div className="grid grid-cols-4 gap-3">
+        {[
+          { label: "Reportar", icon: Flag, tab: "report" as TabId, color: "bg-orange-50 text-orange-600" },
+          { label: "Ver Mapa", icon: Map, tab: "map" as TabId, color: "bg-blue-50 text-blue-600" },
+          { label: "Comunidad", icon: Users, tab: "alerts" as TabId, color: "bg-purple-50 text-purple-600" },
+          { label: "Configurar", icon: Settings, tab: "profile" as TabId, color: "bg-slate-100 text-slate-600" },
+        ].map((item) => (
+          <button
+            key={item.label}
+            onClick={() => onNavigate(item.tab)}
+            className="flex flex-col items-center gap-1.5 active:scale-95 transition-transform"
+          >
+            <div className={`w-14 h-14 rounded-2xl ${item.color} flex items-center justify-center`}>
+              <item.icon className="w-6 h-6" />
+            </div>
+            <span className="text-[11px] font-medium text-slate-600">{item.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Recent Alerts */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold text-slate-900">Alertas Recientes</h3>
+          <button
+            onClick={() => onNavigate("alerts")}
+            className="text-sm text-blue-600 font-medium flex items-center gap-1"
+          >
+            Ver todas <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="space-y-2">
+          {recentAlerts.map((alert) => (
+            <div
+              key={alert.id}
+              className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 flex items-start gap-3"
+            >
+              <div
+                className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                  alert.status === "activa"
+                    ? "bg-red-100 text-red-600"
+                    : alert.status === "en_revision"
+                      ? "bg-amber-100 text-amber-600"
+                      : "bg-green-100 text-green-600"
+                }`}
+              >
+                <CategoryIcon name={alert.categoryIcon} size={20} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <h4 className="text-sm font-semibold text-slate-900 truncate">{alert.title}</h4>
+                  <Badge
+                    variant="outline"
+                    className={`text-[10px] px-2 py-0 border-0 ${getStatusColor(alert.status)}`}
+                  >
+                    {alert.status === "activa" ? "Activa" : alert.status === "en_revision" ? "Revisión" : "Resuelta"}
+                  </Badge>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  {alert.time}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TAB 2: REPORT (Reportar)
+   ═══════════════════════════════════════════════════════════ */
+
+function ReportTab({ onNavigate }: { onNavigate: (tab: TabId) => void }) {
+  const { toast } = useToast();
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [description, setDescription] = useState("");
+  const [isAnonymous, setIsAnonymous] = useState(false);
+  const [useLocation, setUseLocation] = useState(true);
+  const [priority, setPriority] = useState<string>("medium");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!selectedCategory) {
+      toast({ title: "Selecciona una categoría", description: "Debes elegir el tipo de incidente.", variant: "destructive" });
+      return;
+    }
+    if (!description.trim()) {
+      toast({ title: "Agrega una descripción", description: "Describe lo que sucedió.", variant: "destructive" });
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
-      const res = await fetch("/api/demo", {
+      const res = await fetch("/api/alert", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          category: selectedCategory,
+          description,
+          location: useLocation ? "Ubicación actual" : "No especificada",
+          isAnonymous,
+          priority,
+        }),
       });
       const data = await res.json();
-
-      if (res.ok) {
-        setFormSuccess(true);
-        setFormData({ name: "", email: "", condominio: "", message: "" });
-        toast({
-          title: "¡Solicitud enviada!",
-          description: "Nos pondremos en contacto contigo pronto.",
-        });
-      } else {
-        toast({
-          title: "Error",
-          description: data.error || "Hubo un error al enviar la solicitud.",
-          variant: "destructive",
-        });
+      if (data.success) {
+        setShowSuccess(true);
+        setTimeout(() => {
+          setShowSuccess(false);
+          onNavigate("alerts");
+        }, 2000);
       }
     } catch {
-      toast({
-        title: "Error de conexión",
-        description: "No se pudo conectar con el servidor.",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "No se pudo enviar el reporte.", variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  if (showSuccess) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center animate-bounce">
+          <CheckCircle2 className="w-10 h-10 text-green-600" />
+        </div>
+        <h2 className="text-xl font-bold text-slate-900">Reporte Enviado</h2>
+        <p className="text-sm text-slate-500 text-center">Tu reporte ha sido registrado exitosamente. La comunidad será notificada.</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* ─── NAVIGATION ─── */}
-      <nav
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-          scrolled
-            ? "bg-slate-900/95 backdrop-blur-md shadow-lg"
-            : "bg-transparent"
-        }`}
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16 md:h-20">
-            {/* Logo */}
-            <a
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }}
-              className="flex items-center gap-2 text-white font-bold text-xl"
-            >
-              <ShieldLogo />
-              <span>VigilApp</span>
-            </a>
+    <div className="space-y-5 pb-4">
+      {/* Header */}
+      <div>
+        <h1 className="text-xl font-bold text-slate-900">Reportar Incidente</h1>
+        <p className="text-sm text-slate-500 mt-1">Selecciona la categoría y describe lo que sucedió</p>
+      </div>
 
-            {/* Desktop links */}
-            <div className="hidden lg:flex items-center gap-1">
-              {NAV_LINKS.map((link) => (
-                <a
-                  key={link.href}
-                  href={link.href}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    scrollTo(link.href);
-                  }}
-                  className="text-sm text-white/80 hover:text-white px-3 py-2 rounded-md transition-colors"
-                >
-                  {link.label}
-                </a>
-              ))}
-            </div>
-
-            {/* Mobile menu button */}
+      {/* Category Selector */}
+      <div className="space-y-2">
+        <Label className="text-sm font-semibold text-slate-700">Categoría</Label>
+        <div className="grid grid-cols-4 gap-2">
+          {reportCategories.map((cat) => (
             <button
-              className="lg:hidden text-white p-2"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              aria-label="Toggle menu"
+              key={cat.id}
+              onClick={() => setSelectedCategory(cat.id)}
+              className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all active:scale-95 ${
+                selectedCategory === cat.id
+                  ? "border-blue-500 bg-blue-50"
+                  : "border-slate-200 bg-white hover:border-slate-300"
+              }`}
             >
-              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </button>
-          </div>
-        </div>
-
-        {/* Mobile menu */}
-        <div
-          className={`lg:hidden transition-all duration-300 overflow-hidden ${
-            mobileMenuOpen ? "max-h-screen opacity-100" : "max-h-0 opacity-0"
-          }`}
-        >
-          <div className="bg-slate-900/95 backdrop-blur-md border-t border-white/10 px-4 py-4 space-y-1">
-            {NAV_LINKS.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                onClick={(e) => {
-                  e.preventDefault();
-                  scrollTo(link.href);
-                }}
-                className="block text-white/80 hover:text-white px-3 py-3 rounded-md transition-colors"
+              <div
+                className="w-10 h-10 rounded-lg flex items-center justify-center"
+                style={{ backgroundColor: cat.color + "15" }}
               >
-                {link.label}
-              </a>
-            ))}
+                <CategoryIcon name={cat.icon} size={20} className="" />
+                <style>{`
+                  [data-cat-icon="${cat.id}"] { color: ${cat.color}; }
+                `}</style>
+              </div>
+              <span className="text-[10px] font-medium text-slate-600 text-center leading-tight">
+                {cat.label}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Description */}
+      <div className="space-y-2">
+        <Label className="text-sm font-semibold text-slate-700">Descripción</Label>
+        <Textarea
+          placeholder="Describe lo que sucedió..."
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          className="min-h-[100px] rounded-xl resize-none border-slate-200"
+        />
+      </div>
+
+      {/* Location */}
+      <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <MapPin className="w-5 h-5 text-blue-600" />
+            <span className="text-sm font-semibold text-slate-700">Ubicación actual</span>
+          </div>
+          <Switch checked={useLocation} onCheckedChange={setUseLocation} />
+        </div>
+        {useLocation && (
+          <div className="relative h-32 rounded-xl overflow-hidden bg-slate-100">
+            <Image src="/download/map-bg.png" alt="Mapa" fill className="object-cover" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="bg-blue-500 w-4 h-4 rounded-full border-2 border-white shadow-lg" />
+            </div>
+            <div className="absolute bottom-2 left-2 bg-white/90 backdrop-blur-sm rounded-lg px-2 py-1 text-[10px] text-slate-600">
+              Calle Los Robles #234
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Photo attachment */}
+      <div className="space-y-2">
+        <Label className="text-sm font-semibold text-slate-700">Evidencia fotográfica</Label>
+        <button className="w-full border-2 border-dashed border-slate-200 rounded-xl p-6 flex flex-col items-center gap-2 active:bg-slate-50 transition-colors">
+          <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center">
+            <Camera className="w-6 h-6 text-slate-400" />
+          </div>
+          <span className="text-sm font-medium text-slate-500">Agregar foto</span>
+          <span className="text-[10px] text-slate-400">Toma una foto o selecciona de la galería</span>
+        </button>
+      </div>
+
+      {/* Anonymous toggle */}
+      <div className="flex items-center justify-between bg-white rounded-xl border border-slate-200 p-4">
+        <div>
+          <span className="text-sm font-semibold text-slate-700">Reportar de forma anónima</span>
+          <p className="text-[11px] text-slate-400 mt-0.5">Tu identidad no será visible para otros</p>
+        </div>
+        <Switch checked={isAnonymous} onCheckedChange={setIsAnonymous} />
+      </div>
+
+      {/* Priority selector */}
+      <div className="space-y-2">
+        <Label className="text-sm font-semibold text-slate-700">Prioridad</Label>
+        <div className="grid grid-cols-4 gap-2">
+          {[
+            { value: "low", label: "Baja", color: "bg-blue-100 text-blue-700 border-blue-200" },
+            { value: "medium", label: "Media", color: "bg-amber-100 text-amber-700 border-amber-200" },
+            { value: "high", label: "Alta", color: "bg-orange-100 text-orange-700 border-orange-200" },
+            { value: "critical", label: "Crítica", color: "bg-red-100 text-red-700 border-red-200" },
+          ].map((p) => (
+            <button
+              key={p.value}
+              onClick={() => setPriority(p.value)}
+              className={`py-2.5 rounded-xl text-xs font-semibold border-2 transition-all active:scale-95 ${
+                priority === p.value ? p.color : "border-slate-200 bg-white text-slate-500"
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Submit */}
+      <Button
+        onClick={handleSubmit}
+        disabled={isSubmitting}
+        className="w-full bg-green-600 hover:bg-green-700 text-white py-6 text-base font-semibold rounded-xl"
+      >
+        {isSubmitting ? (
+          <span className="flex items-center gap-2">
+            <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            Enviando...
+          </span>
+        ) : (
+          <span className="flex items-center gap-2">
+            <Send className="w-5 h-5" />
+            Enviar Reporte
+          </span>
+        )}
+      </Button>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TAB 3: MAP (Mapa)
+   ═══════════════════════════════════════════════════════════ */
+
+function MapTab() {
+  const [selectedFilter, setSelectedFilter] = useState("Todos");
+  const [selectedMarker, setSelectedMarker] = useState<IncidentMarker | null>(null);
+
+  const filteredMarkers =
+    selectedFilter === "Críticos"
+      ? incidentMarkers.filter((m) => m.severity === "critical")
+      : selectedFilter === "Resueltos"
+        ? incidentMarkers.slice(4, 6)
+        : incidentMarkers;
+
+  return (
+    <div className="space-y-0 pb-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold text-slate-900">Mapa de Incidentes</h1>
+        <button className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center shadow-sm">
+          <Filter className="w-5 h-5 text-slate-600" />
+        </button>
+      </div>
+
+      {/* Map Area */}
+      <div className="relative h-[380px] rounded-2xl overflow-hidden shadow-sm border border-slate-200 bg-slate-100 mt-3">
+        <Image src="/download/map-bg.png" alt="Mapa de la comunidad" fill className="object-cover" />
+
+        {/* Grid overlay for map feel */}
+        <div className="absolute inset-0" style={{
+          backgroundImage: "linear-gradient(rgba(30,64,175,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(30,64,175,0.05) 1px, transparent 1px)",
+          backgroundSize: "40px 40px",
+        }} />
+
+        {/* Condominium perimeter outline */}
+        <div className="absolute inset-4 border-2 border-dashed border-blue-300 rounded-3xl" />
+
+        {/* Current location */}
+        <div className="absolute" style={{ left: "45%", top: "48%" }}>
+          <div className="relative">
+            <div className="absolute inset-0 w-6 h-6 bg-blue-400/30 rounded-full animate-ping" />
+            <div className="relative w-6 h-6 bg-blue-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center">
+              <div className="w-2 h-2 bg-white rounded-full" />
+            </div>
+          </div>
+          <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[9px] bg-blue-600 text-white px-1.5 py-0.5 rounded-full whitespace-nowrap font-medium">
+            Tú
+          </span>
+        </div>
+
+        {/* Incident markers */}
+        {filteredMarkers.map((marker) => (
+          <button
+            key={marker.id}
+            onClick={() => setSelectedMarker(marker)}
+            className="absolute transition-transform active:scale-90 hover:scale-110"
+            style={{ left: `${marker.lng}%`, top: `${marker.lat}%` }}
+          >
+            <div
+              className="w-8 h-8 rounded-full border-2 border-white shadow-lg flex items-center justify-center"
+              style={{ backgroundColor: getSeverityColor(marker.severity) }}
+            >
+              {marker.severity === "critical" ? (
+                <AlertTriangle className="w-4 h-4 text-white" />
+              ) : marker.severity === "warning" ? (
+                <AlertTriangle className="w-4 h-4 text-white" />
+              ) : (
+                <InfoIcon />
+              )}
+            </div>
+          </button>
+        ))}
+
+        {/* Legend */}
+        <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm rounded-xl p-2.5 shadow-lg space-y-1.5">
+          <p className="text-[10px] font-semibold text-slate-700">Leyenda</p>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full bg-red-600" />
+            <span className="text-[10px] text-slate-500">Crítico</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full bg-orange-500" />
+            <span className="text-[10px] text-slate-500">Advertencia</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full bg-blue-500" />
+            <span className="text-[10px] text-slate-500">Info</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full bg-blue-500 border-2 border-white shadow" />
+            <span className="text-[10px] text-slate-500">Mi ubicación</span>
           </div>
         </div>
-      </nav>
+      </div>
 
-      <main>
-        {/* ═══════════════════════════════════════════
-            SECTION 1: HERO
-            ═══════════════════════════════════════════ */}
-        <section className="relative min-h-screen flex items-center bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 overflow-hidden">
-          {/* Background pattern */}
-          <div className="absolute inset-0 opacity-5">
+      {/* Filter Chips */}
+      <div className="flex gap-2 overflow-x-auto py-3 scrollbar-hide">
+        {MAP_FILTERS.map((filter) => (
+          <button
+            key={filter}
+            onClick={() => setSelectedFilter(filter)}
+            className={`px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all active:scale-95 ${
+              selectedFilter === filter
+                ? "bg-blue-600 text-white shadow-md"
+                : "bg-white border border-slate-200 text-slate-600"
+            }`}
+          >
+            {filter}
+          </button>
+        ))}
+      </div>
+
+      {/* Selected marker bottom sheet */}
+      {selectedMarker && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setSelectedMarker(null)} />
+          <div className="relative bg-white rounded-t-3xl w-full max-w-md p-6 pb-8 space-y-3 animate-slide-up">
+            <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto" />
+            <div className="flex items-start gap-3">
+              <div
+                className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ backgroundColor: getSeverityColor(selectedMarker.severity) + "15" }}
+              >
+                <AlertTriangle className="w-6 h-6" style={{ color: getSeverityColor(selectedMarker.severity) }} />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-bold text-slate-900">{selectedMarker.title}</h3>
+                <p className="text-sm text-slate-500 mt-0.5">{selectedMarker.description}</p>
+                <div className="flex items-center gap-3 mt-2">
+                  <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                    <Clock className="w-3 h-3" /> {selectedMarker.time}
+                  </span>
+                  <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                    <MapPin className="w-3 h-3" /> {selectedMarker.distance}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl">
+              Ver detalles completos
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InfoIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 16v-4" />
+      <path d="M12 8h.01" />
+    </svg>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TAB 4: ALERTS (Alertas)
+   ═══════════════════════════════════════════════════════════ */
+
+function AlertsTab() {
+  const [selectedFilter, setSelectedFilter] = useState("Todas");
+  const { toast } = useToast();
+
+  const filteredAlerts =
+    selectedFilter === "Activas"
+      ? mockAlerts.filter((a) => a.status === "activa")
+      : selectedFilter === "Resueltas"
+        ? mockAlerts.filter((a) => a.status === "resuelta")
+        : selectedFilter === "Mías"
+          ? mockAlerts.filter((_, i) => i % 3 === 0)
+          : mockAlerts;
+
+  return (
+    <div className="space-y-4 pb-20">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold text-slate-900">Alertas Comunitarias</h1>
+        <button className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center shadow-sm">
+          <Filter className="w-5 h-5 text-slate-600" />
+        </button>
+      </div>
+
+      {/* Filter tabs */}
+      <div className="flex gap-2">
+        {ALERT_FILTERS.map((filter) => (
+          <button
+            key={filter}
+            onClick={() => setSelectedFilter(filter)}
+            className={`px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all active:scale-95 ${
+              selectedFilter === filter
+                ? "bg-blue-600 text-white shadow-md"
+                : "bg-white border border-slate-200 text-slate-600"
+            }`}
+          >
+            {filter}
+          </button>
+        ))}
+      </div>
+
+      {/* Alert cards list */}
+      {filteredAlerts.length === 0 ? (
+        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-3">
+          <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center">
+            <Bell className="w-8 h-8 text-slate-300" />
+          </div>
+          <p className="text-sm text-slate-400">No hay alertas en esta categoría</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filteredAlerts.map((alert) => (
             <div
-              className="absolute inset-0"
-              style={{
-                backgroundImage:
-                  "radial-gradient(circle at 1px 1px, white 1px, transparent 0)",
-                backgroundSize: "40px 40px",
-              }}
-            />
-          </div>
-          {/* Gradient orbs */}
-          <div className="absolute top-20 right-20 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl" />
-          <div className="absolute bottom-20 left-20 w-72 h-72 bg-blue-600/10 rounded-full blur-3xl" />
-
-          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-32 grid lg:grid-cols-2 gap-12 items-center">
-            <FadeIn>
-              <div className="space-y-6">
-                <div className="inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 rounded-full px-4 py-2">
-                  <ShieldCheck className="w-4 h-4 text-blue-400" />
-                  <span className="text-sm text-blue-300">
-                    Seguridad comunitaria inteligente
-                  </span>
+              key={alert.id}
+              className={`bg-white rounded-xl p-4 shadow-sm border-l-4 ${
+                alert.status === "activa"
+                  ? "border-l-red-500"
+                  : alert.status === "en_revision"
+                    ? "border-l-amber-500"
+                    : "border-l-green-500"
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                    alert.priority === "critical"
+                      ? "bg-red-100 text-red-600"
+                      : alert.priority === "high"
+                        ? "bg-orange-100 text-orange-600"
+                        : alert.priority === "medium"
+                          ? "bg-amber-100 text-amber-600"
+                          : "bg-blue-100 text-blue-600"
+                  }`}
+                >
+                  <CategoryIcon name={alert.categoryIcon} size={20} />
                 </div>
-                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-tight">
-                  Seguridad inteligente para tu{" "}
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-blue-600">
-                    comunidad
-                  </span>
-                </h1>
-                <p className="text-lg text-slate-300 max-w-xl">
-                  Botón SOS, reportes vecinales y geolocalización. Conecta a tu
-                  comunidad con tecnología que protege lo que más importa.
-                </p>
-                <div className="flex flex-wrap gap-4">
-                  <Button
-                    size="lg"
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-base"
-                    onClick={() => scrollTo("#demo")}
-                  >
-                    Agendar una Demo
-                    <ChevronDown className="w-4 h-4 ml-2 rotate-[-90deg]" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="lg"
-                    className="border-white/20 text-white hover:bg-white/10 px-8 py-3 text-base"
-                    onClick={() => scrollTo("#funcionalidades")}
-                  >
-                    Ver Funcionalidades
-                  </Button>
-                </div>
-              </div>
-            </FadeIn>
-
-            <FadeIn delay={200}>
-              <div className="relative flex justify-center">
-                <div className="absolute -inset-4 bg-gradient-to-r from-blue-500/20 to-blue-600/20 rounded-3xl blur-2xl" />
-                <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-white/10">
-                  <Image
-                    src="/download/hero-app.jpg"
-                    alt="VigilApp - Aplicación de seguridad comunitaria"
-                    width={1152}
-                    height={864}
-                    className="w-full h-auto max-w-lg lg:max-w-none"
-                    priority
-                  />
-                </div>
-              </div>
-            </FadeIn>
-          </div>
-
-          {/* Scroll indicator */}
-          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-white/50">
-            <span className="text-xs tracking-widest uppercase">Scroll</span>
-            <div className="w-5 h-8 border-2 border-white/30 rounded-full flex justify-center pt-1">
-              <div className="w-1 h-2 bg-white/50 rounded-full animate-bounce" />
-            </div>
-          </div>
-        </section>
-
-        {/* ═══════════════════════════════════════════
-            SECTION 2: QUIÉNES SOMOS
-            ═══════════════════════════════════════════ */}
-        <section id="quienes-somos" className="py-20 lg:py-28 bg-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-              <FadeIn>
-                <div className="space-y-6">
-                  <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 rounded-full px-4 py-2 text-sm font-medium">
-                    <Star className="w-4 h-4" />
-                    Sobre Nosotros
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <h4 className="text-sm font-semibold text-slate-900 truncate">{alert.title}</h4>
+                    <Badge
+                      variant="outline"
+                      className={`text-[10px] px-2 py-0 border-0 flex-shrink-0 ${getStatusColor(alert.status)}`}
+                    >
+                      {alert.status === "activa"
+                        ? "Activa"
+                        : alert.status === "en_revision"
+                          ? "En revisión"
+                          : "Resuelta"}
+                    </Badge>
                   </div>
-                  <h2 className="text-3xl sm:text-4xl font-bold text-slate-900">
-                    Quiénes Somos
-                  </h2>
-                  <p className="text-slate-600 leading-relaxed text-lg">
-                    VigilApp nació con la misión de transformar la seguridad
-                    comunitaria en Chile. Somos una empresa tecnológica que cree
-                    en el poder de la colaboración vecinal y la innovación para
-                    crear comunidades más seguras y conectadas.
-                  </p>
-                  <p className="text-slate-600 leading-relaxed">
-                    Nuestra plataforma integra tecnología de última generación
-                    con una interfaz simple e intuitiva, permitiendo que todos los
-                    miembros de una comunidad puedan reportar incidentes,
-                    activar alertas de emergencia y mantenerse informados en
-                    tiempo real.
-                  </p>
-
-                  {/* Stats */}
-                  <div className="grid grid-cols-2 gap-6 pt-6">
-                    <div className="bg-blue-50 rounded-xl p-6 text-center">
-                      <div className="text-3xl font-bold text-blue-700">
-                        500+
-                      </div>
-                      <div className="text-sm text-blue-600 mt-1">
-                        Condominios Conectados
-                      </div>
-                    </div>
-                    <div className="bg-blue-50 rounded-xl p-6 text-center">
-                      <div className="text-3xl font-bold text-blue-700">
-                        10K+
-                      </div>
-                      <div className="text-sm text-blue-600 mt-1">
-                        Usuarios Activos
-                      </div>
-                    </div>
+                  <p className="text-xs text-slate-500 mt-1 line-clamp-2">{alert.description}</p>
+                  <div className="flex items-center gap-3 mt-2">
+                    <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                      <Clock className="w-3 h-3" /> {alert.time}
+                    </span>
+                    <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                      <MapPin className="w-3 h-3" /> {alert.location.split(" - ")[0]}
+                    </span>
+                    <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                      <MessageSquare className="w-3 h-3" /> {alert.comments}
+                    </span>
                   </div>
-                </div>
-              </FadeIn>
-
-              <FadeIn delay={200}>
-                <div className="relative">
-                  <div className="absolute -inset-4 bg-gradient-to-r from-blue-100 to-blue-50 rounded-3xl" />
-                  <div className="relative rounded-2xl overflow-hidden shadow-xl">
-                    <Image
-                      src="/download/about-community.jpg"
-                      alt="Comunidad segura con VigilApp"
-                      width={1152}
-                      height={864}
-                      className="w-full h-auto"
-                    />
-                  </div>
-                </div>
-              </FadeIn>
-            </div>
-          </div>
-        </section>
-
-        {/* ═══════════════════════════════════════════
-            SECTION 3: FUNCIONALIDADES
-            ═══════════════════════════════════════════ */}
-        <section
-          id="funcionalidades"
-          className="py-20 lg:py-28 bg-slate-50"
-        >
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <FadeIn>
-              <div className="text-center max-w-2xl mx-auto mb-16">
-                <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 rounded-full px-4 py-2 text-sm font-medium mb-4">
-                  <Smartphone className="w-4 h-4" />
-                  Funcionalidades
-                </div>
-                <h2 className="text-3xl sm:text-4xl font-bold text-slate-900">
-                  Todo lo que necesitas para proteger tu comunidad
-                </h2>
-                <p className="mt-4 text-slate-600">
-                  Herramientas poderosas diseñadas para la seguridad vecinal
-                </p>
-              </div>
-            </FadeIn>
-
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
-              {FEATURES.map((feature, idx) => (
-                <FadeIn key={feature.title} delay={idx * 100}>
-                  <div className="group bg-white rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg border border-slate-100 hover:border-blue-200 transition-all duration-300 hover:-translate-y-1">
-                    <div className="w-14 h-14 rounded-xl bg-blue-50 group-hover:bg-blue-100 flex items-center justify-center mb-5 transition-colors duration-300">
-                      <feature.icon className="w-7 h-7 text-blue-600" />
-                    </div>
-                    <h3 className="text-xl font-semibold text-slate-900 mb-3">
-                      {feature.title}
-                    </h3>
-                    <p className="text-slate-600 leading-relaxed">
-                      {feature.description}
-                    </p>
-                  </div>
-                </FadeIn>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* ═══════════════════════════════════════════
-            SECTION 4: GALERÍA
-            ═══════════════════════════════════════════ */}
-        <section id="galeria" className="py-20 lg:py-28 bg-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <FadeIn>
-              <div className="text-center max-w-2xl mx-auto mb-16">
-                <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 rounded-full px-4 py-2 text-sm font-medium mb-4">
-                  <Map className="w-4 h-4" />
-                  Galería
-                </div>
-                <h2 className="text-3xl sm:text-4xl font-bold text-slate-900">
-                  Conoce VigilApp en acción
-                </h2>
-                <p className="mt-4 text-slate-600">
-                  Explora las funcionalidades que hacen de VigilApp la mejor
-                  opción para tu comunidad
-                </p>
-              </div>
-            </FadeIn>
-
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {GALLERY_ITEMS.map((item, idx) => (
-                <FadeIn key={item.title} delay={idx * 100}>
-                  <div className="group relative rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-shadow duration-300 cursor-pointer aspect-[4/3]">
-                    <Image
-                      src={item.image}
-                      alt={item.title}
-                      fill
-                      className="object-cover group-hover:scale-110 transition-transform duration-500"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-6">
-                      <h3 className="text-white text-lg font-semibold mb-2">
-                        {item.title}
-                      </h3>
-                      <p className="text-white/80 text-sm leading-relaxed">
-                        {item.description}
-                      </p>
-                    </div>
-                  </div>
-                </FadeIn>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* ═══════════════════════════════════════════
-            SECTION 5: TESTIMONIOS
-            ═══════════════════════════════════════════ */}
-        <section
-          id="testimonios"
-          className="py-20 lg:py-28 bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900"
-        >
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <FadeIn>
-              <div className="text-center max-w-2xl mx-auto mb-16">
-                <div className="inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 rounded-full px-4 py-2 text-sm font-medium text-blue-300 mb-4">
-                  <Quote className="w-4 h-4" />
-                  Testimonios
-                </div>
-                <h2 className="text-3xl sm:text-4xl font-bold text-white">
-                  Lo que dicen nuestros usuarios
-                </h2>
-              </div>
-            </FadeIn>
-
-            <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-              {TESTIMONIALS.map((t, idx) => (
-                <FadeIn key={t.author} delay={idx * 150}>
-                  <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-colors duration-300">
-                    <Quote className="w-10 h-10 text-blue-400 mb-4" />
-                    <p className="text-slate-200 leading-relaxed mb-6 text-lg">
-                      &ldquo;{t.text}&rdquo;
-                    </p>
-                    <div>
-                      <div className="font-semibold text-white">{t.author}</div>
-                      <div className="text-slate-400 text-sm">{t.role}</div>
-                    </div>
-                  </div>
-                </FadeIn>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* ═══════════════════════════════════════════
-            SECTION 6: DEMO FORM
-            ═══════════════════════════════════════════ */}
-        <section id="demo" className="py-20 lg:py-28 bg-slate-50">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-start">
-              <FadeIn>
-                <div className="space-y-6">
-                  <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 rounded-full px-4 py-2 text-sm font-medium">
-                    <Send className="w-4 h-4" />
-                    Agenda una Demo
-                  </div>
-                  <h2 className="text-3xl sm:text-4xl font-bold text-slate-900">
-                    ¿Listo para proteger tu comunidad?
-                  </h2>
-                  <p className="text-slate-600 text-lg leading-relaxed">
-                    Completa el formulario y un especialista se pondrá en
-                    contacto contigo para mostrarte cómo VigilApp puede
-                    transformar la seguridad de tu comunidad.
-                  </p>
-                  <div className="space-y-4 pt-4">
-                    {[
-                      "Demo personalizada para tu comunidad",
-                      "Sin compromiso de contratación",
-                      "Respuesta en menos de 24 horas",
-                    ].map((item) => (
-                      <div key={item} className="flex items-center gap-3">
-                        <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
-                        <span className="text-slate-700">{item}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </FadeIn>
-
-              <FadeIn delay={200}>
-                <div className="bg-white rounded-2xl shadow-lg p-8 border border-slate-100">
-                  {formSuccess ? (
-                    <div className="text-center py-12 space-y-4">
-                      <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto" />
-                      <h3 className="text-2xl font-bold text-slate-900">
-                        ¡Solicitud Enviada!
-                      </h3>
-                      <p className="text-slate-600">
-                        Gracias por tu interés. Nos pondremos en contacto contigo
-                        pronto.
-                      </p>
-                      <Button
-                        variant="outline"
-                        onClick={() => setFormSuccess(false)}
-                      >
-                        Enviar otra solicitud
-                      </Button>
-                    </div>
-                  ) : (
-                    <form onSubmit={handleSubmit} className="space-y-5">
-                      <div className="space-y-2">
-                        <Label htmlFor="name">Nombre completo</Label>
-                        <Input
-                          id="name"
-                          placeholder="Tu nombre"
-                          value={formData.name}
-                          onChange={(e) =>
-                            setFormData({ ...formData, name: e.target.value })
-                          }
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="email">Email</Label>
-                        <Input
-                          id="email"
-                          type="email"
-                          placeholder="tu@email.com"
-                          value={formData.email}
-                          onChange={(e) =>
-                            setFormData({ ...formData, email: e.target.value })
-                          }
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="condominio">Condominio</Label>
-                        <Input
-                          id="condominio"
-                          placeholder="Nombre del condominio"
-                          value={formData.condominio}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              condominio: e.target.value,
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="message">Mensaje</Label>
-                        <Textarea
-                          id="message"
-                          placeholder="Cuéntanos sobre tu comunidad..."
-                          rows={4}
-                          value={formData.message}
-                          onChange={(e) =>
-                            setFormData({ ...formData, message: e.target.value })
-                          }
-                        />
-                      </div>
-                      <Button
-                        type="submit"
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 text-base"
-                        disabled={isSubmitting}
-                      >
-                        {isSubmitting ? (
-                          <span className="flex items-center gap-2">
-                            <svg
-                              className="animate-spin h-4 w-4"
-                              viewBox="0 0 24 24"
-                            >
-                              <circle
-                                className="opacity-25"
-                                cx="12"
-                                cy="12"
-                                r="10"
-                                stroke="currentColor"
-                                strokeWidth="4"
-                                fill="none"
-                              />
-                              <path
-                                className="opacity-75"
-                                fill="currentColor"
-                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                              />
-                            </svg>
-                            Enviando...
-                          </span>
-                        ) : (
-                          "Enviar solicitud"
-                        )}
-                      </Button>
-                    </form>
+                  {alert.isAnonymous && (
+                    <span className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                      <User className="w-3 h-3" /> Anónimo
+                    </span>
                   )}
                 </div>
-              </FadeIn>
+              </div>
             </div>
+          ))}
+        </div>
+      )}
+
+      {/* FAB */}
+      <button
+        onClick={() => {
+          toast({ title: "Nueva alerta", description: "Redirigiendo al formulario de reporte..." });
+        }}
+        className="fixed bottom-24 right-4 md:right-[calc(50%-200px+16px)] w-14 h-14 bg-green-600 hover:bg-green-700 text-white rounded-2xl shadow-xl shadow-green-600/30 flex items-center justify-center active:scale-95 transition-transform z-40"
+      >
+        <Plus className="w-6 h-6" />
+      </button>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TAB 5: PROFILE (Perfil)
+   ═══════════════════════════════════════════════════════════ */
+
+function ProfileTab() {
+  const { toast } = useToast();
+  const [notifications, setNotifications] = useState({
+    sos: true,
+    reports: true,
+    updates: false,
+    community: true,
+  });
+  const [privacy, setPrivacy] = useState({
+    location: true,
+    profile: true,
+    anonymous: false,
+  });
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  const handleSave = async () => {
+    try {
+      const res = await fetch("/api/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notifications, privacy }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast({ title: "Perfil actualizado", description: "Tus preferencias han sido guardadas." });
+      }
+    } catch {
+      toast({ title: "Error", description: "No se pudo guardar.", variant: "destructive" });
+    }
+  };
+
+  return (
+    <div className="space-y-5 pb-4">
+      {/* Profile Header */}
+      <div className="flex items-center gap-4">
+        <div className="relative">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-lg">
+            <span className="text-2xl font-bold text-white">{userProfile.avatarInitial}</span>
           </div>
-        </section>
+          <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-2 border-white" />
+        </div>
+        <div>
+          <h1 className="text-lg font-bold text-slate-900">{userProfile.name}</h1>
+          <p className="text-sm text-blue-600 font-medium">{userProfile.role}</p>
+          <p className="text-xs text-slate-400">{userProfile.condo}</p>
+        </div>
+      </div>
 
-        {/* ═══════════════════════════════════════════
-            SECTION 7: FAQ
-            ═══════════════════════════════════════════ */}
-        <section className="py-20 lg:py-28 bg-white">
-          <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-            <FadeIn>
-              <div className="text-center mb-16">
-                <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 rounded-full px-4 py-2 text-sm font-medium mb-4">
-                  <HelpCircle className="w-4 h-4" />
-                  Preguntas Frecuentes
-                </div>
-                <h2 className="text-3xl sm:text-4xl font-bold text-slate-900">
-                  ¿Tienes dudas?
-                </h2>
-                <p className="mt-4 text-slate-600">
-                  Encuentra respuestas a las preguntas más comunes
-                </p>
-              </div>
-            </FadeIn>
-
-            <FadeIn delay={100}>
-              <Accordion type="single" collapsible className="space-y-3">
-                {FAQ_ITEMS.map((item, idx) => (
-                  <AccordionItem
-                    key={idx}
-                    value={`faq-${idx}`}
-                    className="bg-slate-50 border border-slate-200 rounded-xl px-6 data-[state=open]:bg-blue-50 data-[state=open]:border-blue-200 transition-colors"
-                  >
-                    <AccordionTrigger className="text-left text-slate-900 font-medium hover:no-underline py-5">
-                      {item.question}
-                    </AccordionTrigger>
-                    <AccordionContent className="text-slate-600 pb-5 leading-relaxed">
-                      {item.answer}
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            </FadeIn>
+      {/* Stats Row */}
+      <div className="grid grid-cols-3 gap-2">
+        {[
+          { value: userProfile.reports, label: "Reportes", color: "bg-blue-50 text-blue-700" },
+          { value: "Activa", label: "Comunidad", color: "bg-green-50 text-green-700" },
+          { value: userProfile.memberSince, label: "Miembro desde", color: "bg-purple-50 text-purple-700" },
+        ].map((stat) => (
+          <div key={stat.label} className={`${stat.color} rounded-xl p-3 text-center`}>
+            <div className="text-lg font-bold">{stat.value}</div>
+            <div className="text-[10px] mt-0.5 opacity-70">{stat.label}</div>
           </div>
-        </section>
+        ))}
+      </div>
 
-        {/* ═══════════════════════════════════════════
-            SECTION 8: PRECIOS
-            ═══════════════════════════════════════════ */}
-        <section id="precios" className="py-20 lg:py-28 bg-slate-50">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <FadeIn>
-              <div className="text-center max-w-2xl mx-auto mb-16">
-                <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 rounded-full px-4 py-2 text-sm font-medium mb-4">
-                  <Building2 className="w-4 h-4" />
-                  Precios
-                </div>
-                <h2 className="text-3xl sm:text-4xl font-bold text-slate-900">
-                  Planes adaptados a tu comunidad
-                </h2>
-                <p className="mt-4 text-slate-600">
-                  Precios en UF por usuario/mes. Mientras más grande tu
-                  comunidad, menor el costo por usuario.
-                </p>
-              </div>
-            </FadeIn>
-
-            <FadeIn delay={100}>
-              <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-slate-200">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-slate-900 text-white">
-                        <th className="text-left px-6 py-4 font-semibold">
-                          Rango de Usuarios
-                        </th>
-                        <th className="text-left px-6 py-4 font-semibold">
-                          Plan
-                        </th>
-                        <th className="text-left px-6 py-4 font-semibold">
-                          Precio (UF/usuario/mes)
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {PRICING_TIERS.map((tier) => (
-                        <tr
-                          key={tier.range}
-                          className={`border-b border-slate-100 last:border-0 transition-colors ${
-                            tier.popular
-                              ? "bg-blue-50/50"
-                              : "hover:bg-slate-50"
-                          }`}
-                        >
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-slate-900">
-                                {tier.range} usuarios
-                              </span>
-                              {tier.popular && (
-                                <span className="bg-blue-600 text-white text-xs font-medium px-2 py-0.5 rounded-full">
-                                  Popular
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-slate-600">
-                            {tier.label}
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="font-bold text-blue-700">
-                              {tier.price}
-                            </span>{" "}
-                            <span className="text-slate-500">UF</span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="bg-slate-50 px-6 py-4 border-t border-slate-200">
-                  <p className="text-sm text-slate-600">
-                    <strong className="text-slate-900">Nota:</strong> El
-                    mínimo por comunidad es de{" "}
-                    <strong className="text-blue-700">0,2 UF/mes</strong>,
-                    independientemente de la cantidad de usuarios.
-                  </p>
-                </div>
-              </div>
-            </FadeIn>
-          </div>
-        </section>
-
-        {/* ═══════════════════════════════════════════
-            SECTION 9: SOPORTE
-            ═══════════════════════════════════════════ */}
-        <section id="soporte" className="py-20 lg:py-28 bg-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <FadeIn>
-              <div className="text-center max-w-2xl mx-auto mb-16">
-                <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 rounded-full px-4 py-2 text-sm font-medium mb-4">
-                  <Phone className="w-4 h-4" />
-                  Soporte
-                </div>
-                <h2 className="text-3xl sm:text-4xl font-bold text-slate-900">
-                  Estamos aquí para ayudarte
-                </h2>
-                <p className="mt-4 text-slate-600">
-                  Múltiples canales de contacto para tu comodidad
-                </p>
-              </div>
-            </FadeIn>
-
-            <div className="grid sm:grid-cols-3 gap-6 lg:gap-8 max-w-4xl mx-auto">
-              <FadeIn delay={0}>
-                <div className="bg-slate-50 rounded-2xl p-8 text-center hover:shadow-lg hover:bg-blue-50 transition-all duration-300 border border-slate-100 hover:border-blue-200">
-                  <div className="w-14 h-14 rounded-xl bg-blue-100 flex items-center justify-center mx-auto mb-5">
-                    <HelpCircle className="w-7 h-7 text-blue-600" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-slate-900 mb-2">
-                    FAQ
-                  </h3>
-                  <p className="text-slate-600 text-sm">
-                    Revisa nuestras preguntas frecuentes para resolver tus dudas
-                    rápidamente.
-                  </p>
-                </div>
-              </FadeIn>
-
-              <FadeIn delay={100}>
-                <div className="bg-slate-50 rounded-2xl p-8 text-center hover:shadow-lg hover:bg-blue-50 transition-all duration-300 border border-slate-100 hover:border-blue-200">
-                  <div className="w-14 h-14 rounded-xl bg-blue-100 flex items-center justify-center mx-auto mb-5">
-                    <Mail className="w-7 h-7 text-blue-600" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-slate-900 mb-2">
-                    Correo Electrónico
-                  </h3>
-                  <p className="text-slate-600 text-sm">
-                    Escríbenos a
-                  </p>
-                  <a
-                    href="mailto:soporte@vigilapp.cl"
-                    className="text-blue-600 font-medium hover:underline"
-                  >
-                    soporte@vigilapp.cl
-                  </a>
-                </div>
-              </FadeIn>
-
-              <FadeIn delay={200}>
-                <div className="bg-slate-50 rounded-2xl p-8 text-center hover:shadow-lg hover:bg-green-50 transition-all duration-300 border border-slate-100 hover:border-green-200">
-                  <div className="w-14 h-14 rounded-xl bg-green-100 flex items-center justify-center mx-auto mb-5">
-                    <Phone className="w-7 h-7 text-green-600" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-slate-900 mb-2">
-                    WhatsApp
-                  </h3>
-                  <p className="text-slate-600 text-sm">
-                    Contáctanos directamente
-                  </p>
-                  <a
-                    href="https://wa.me/56944401850"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-green-600 font-medium hover:underline"
-                  >
-                    +56 9 4440 1850
-                  </a>
-                </div>
-              </FadeIn>
+      {/* Personal Data */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <h3 className="px-4 py-3 text-sm font-bold text-slate-900 bg-slate-50 border-b border-slate-100">Datos Personales</h3>
+        {[
+          { icon: User, label: "Nombre", value: userProfile.name },
+          { icon: Phone, label: "Teléfono", value: userProfile.phone },
+          { icon: Mail, label: "Email", value: userProfile.email },
+          { icon: MapPin, label: "Dirección", value: userProfile.address },
+        ].map((item) => (
+          <div key={item.label} className="flex items-center justify-between px-4 py-3 border-b border-slate-100 last:border-0">
+            <div className="flex items-center gap-3">
+              <item.icon className="w-4 h-4 text-slate-400" />
+              <span className="text-xs text-slate-500">{item.label}</span>
             </div>
+            <span className="text-sm text-slate-900 font-medium">{item.value}</span>
           </div>
-        </section>
+        ))}
+      </div>
 
-        {/* ═══════════════════════════════════════════
-            SECTION 10: CONTACTO / CTA FINAL
-            ═══════════════════════════════════════════ */}
-        <section
-          id="contacto"
-          className="py-20 lg:py-28 bg-gradient-to-br from-blue-700 via-blue-800 to-blue-900"
+      {/* Family */}
+      <button className="w-full bg-white rounded-xl border border-slate-200 p-4 flex items-center justify-between active:bg-slate-50">
+        <div className="flex items-center gap-3">
+          <Users className="w-5 h-5 text-slate-500" />
+          <div className="text-left">
+            <span className="text-sm font-medium text-slate-700">Familiares</span>
+            <p className="text-[11px] text-slate-400">Administrar familiares autorizados</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-full">3</span>
+          <ChevronRight className="w-4 h-4 text-slate-400" />
+        </div>
+      </button>
+
+      {/* Notifications */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <h3 className="px-4 py-3 text-sm font-bold text-slate-900 bg-slate-50 border-b border-slate-100">Notificaciones</h3>
+        {[
+          { key: "sos" as const, label: "Alertas SOS", desc: "Recibir alertas de emergencia" },
+          { key: "reports" as const, label: "Reportes nuevos", desc: "Nuevos incidentes en la comunidad" },
+          { key: "updates" as const, label: "Actualizaciones", desc: "Cambios en el estado de alertas" },
+          { key: "community" as const, label: "Comunidad", desc: "Noticias y avisos generales" },
+        ].map((item) => (
+          <div key={item.key} className="flex items-center justify-between px-4 py-3 border-b border-slate-100 last:border-0">
+            <div>
+              <span className="text-sm font-medium text-slate-700">{item.label}</span>
+              <p className="text-[11px] text-slate-400">{item.desc}</p>
+            </div>
+            <Switch
+              checked={notifications[item.key]}
+              onCheckedChange={(v) => setNotifications({ ...notifications, [item.key]: v })}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Privacy */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <h3 className="px-4 py-3 text-sm font-bold text-slate-900 bg-slate-50 border-b border-slate-100">Privacidad</h3>
+        {[
+          { key: "location" as const, label: "Mostrar ubicación", desc: "Compartir mi ubicación con la comunidad" },
+          { key: "profile" as const, label: "Perfil visible", desc: "Otros pueden ver mi perfil" },
+          { key: "anonymous" as const, label: "Reportes anónimos", desc: "Ocultar mi nombre en reportes" },
+        ].map((item) => (
+          <div key={item.key} className="flex items-center justify-between px-4 py-3 border-b border-slate-100 last:border-0">
+            <div>
+              <span className="text-sm font-medium text-slate-700">{item.label}</span>
+              <p className="text-[11px] text-slate-400">{item.desc}</p>
+            </div>
+            <Switch
+              checked={privacy[item.key]}
+              onCheckedChange={(v) => setPrivacy({ ...privacy, [item.key]: v })}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Community info */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <h3 className="px-4 py-3 text-sm font-bold text-slate-900 bg-slate-50 border-b border-slate-100">Comunidad</h3>
+        <div className="px-4 py-3 border-b border-slate-100 flex justify-between">
+          <span className="text-xs text-slate-500">Condominio</span>
+          <span className="text-sm text-slate-900 font-medium">{userProfile.condo}</span>
+        </div>
+        <div className="px-4 py-3 border-b border-slate-100 flex justify-between">
+          <span className="text-xs text-slate-500">Rol</span>
+          <span className="text-sm text-slate-900 font-medium">{userProfile.role}</span>
+        </div>
+        <div className="px-4 py-3 flex justify-between">
+          <span className="text-xs text-slate-500">Admin</span>
+          <span className="text-sm text-blue-600 font-medium">admin@losrobles.cl</span>
+        </div>
+      </div>
+
+      {/* Action buttons */}
+      <div className="space-y-2">
+        <button
+          onClick={() => toast({ title: "Compartir", description: "Enlace copiado al portapapeles" })}
+          className="w-full bg-green-50 text-green-700 rounded-xl p-4 flex items-center gap-3 active:bg-green-100 transition-colors"
         >
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <FadeIn>
-              <div className="space-y-6">
-                <ShieldLogo />
-                <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white">
-                  ¿Protegemos tu comunidad hoy?
-                </h2>
-                <p className="text-xl text-blue-200 max-w-2xl mx-auto">
-                  Únete a las más de 500 comunidades que ya confían en VigilApp
-                  para su seguridad.
-                </p>
-                <div className="flex flex-wrap justify-center gap-4 pt-4">
-                  <Button
-                    size="lg"
-                    className="bg-white text-blue-700 hover:bg-blue-50 px-8 py-3 text-base font-semibold"
-                    onClick={() => scrollTo("#demo")}
-                  >
-                    Agendar una Demo
-                  </Button>
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="border-white/30 text-white hover:bg-white/10 px-8 py-3 text-base"
-                    onClick={() => scrollTo("#precios")}
-                  >
-                    Ver Precios
-                  </Button>
-                </div>
-              </div>
-            </FadeIn>
-          </div>
-        </section>
-      </main>
+          <Share2 className="w-5 h-5" />
+          <span className="text-sm font-semibold">Compartir App</span>
+        </button>
+        <button
+          onClick={() => toast({ title: "Centro de Ayuda", description: "Próximamente disponible" })}
+          className="w-full bg-white border border-slate-200 rounded-xl p-4 flex items-center gap-3 active:bg-slate-50 transition-colors"
+        >
+          <HelpCircle className="w-5 h-5 text-slate-600" />
+          <span className="text-sm font-medium text-slate-700">Centro de Ayuda</span>
+          <ChevronRight className="w-4 h-4 text-slate-400 ml-auto" />
+        </button>
+        <button className="w-full bg-white border border-slate-200 rounded-xl p-4 flex items-center gap-3 active:bg-slate-50 transition-colors">
+          <FileText className="w-5 h-5 text-slate-600" />
+          <span className="text-sm font-medium text-slate-700">Términos y Condiciones</span>
+          <ChevronRight className="w-4 h-4 text-slate-400 ml-auto" />
+        </button>
+      </div>
 
-      {/* ═══════════════════════════════════════════
-          FOOTER
-          ═══════════════════════════════════════════ */}
-      <footer className="bg-slate-900 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-12">
-            {/* Brand */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <ShieldLogo />
-                <span className="font-bold text-xl">VigilApp</span>
+      {/* Save button */}
+      <Button onClick={handleSave} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-5 rounded-xl">
+        Guardar Cambios
+      </Button>
+
+      {/* Logout */}
+      <button
+        onClick={() => setShowLogoutConfirm(true)}
+        className="w-full border-2 border-red-200 text-red-600 rounded-xl p-4 flex items-center justify-center gap-2 active:bg-red-50 transition-colors"
+      >
+        <LogOut className="w-5 h-5" />
+        <span className="text-sm font-semibold">Cerrar Sesión</span>
+      </button>
+
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowLogoutConfirm(false)} />
+          <div className="relative bg-white rounded-2xl w-[85%] max-w-sm p-6 space-y-4">
+            <div className="text-center space-y-2">
+              <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto">
+                <LogOut className="w-7 h-7 text-red-600" />
               </div>
-              <p className="text-slate-400 leading-relaxed">
-                Seguridad inteligente para comunidades en Chile. Conectando
-                vecinos con tecnología que protege lo que más importa.
-              </p>
-              <div className="flex gap-4 pt-2">
-                {[
-                  { icon: Facebook, label: "Facebook" },
-                  { icon: Instagram, label: "Instagram" },
-                  { icon: Twitter, label: "Twitter" },
-                ].map(({ icon: Icon, label }) => (
-                  <a
-                    key={label}
-                    href="#"
-                    className="w-10 h-10 rounded-lg bg-slate-800 hover:bg-blue-600 flex items-center justify-center transition-colors"
-                    aria-label={label}
-                  >
-                    <Icon className="w-5 h-5" />
-                  </a>
-                ))}
-              </div>
+              <h3 className="text-lg font-bold text-slate-900">¿Cerrar sesión?</h3>
+              <p className="text-sm text-slate-500">No recibirás más alertas de la comunidad</p>
             </div>
-
-            {/* Contact */}
-            <div className="space-y-4">
-              <h4 className="font-semibold text-lg">Contacto</h4>
-              <ul className="space-y-3 text-slate-400">
-                <li className="flex items-center gap-3">
-                  <Mail className="w-4 h-4 flex-shrink-0" />
-                  <a
-                    href="mailto:soporte@vigilapp.cl"
-                    className="hover:text-white transition-colors"
-                  >
-                    soporte@vigilapp.cl
-                  </a>
-                </li>
-                <li className="flex items-center gap-3">
-                  <Phone className="w-4 h-4 flex-shrink-0" />
-                  <a
-                    href="https://wa.me/56944401850"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:text-white transition-colors"
-                  >
-                    +56 9 4440 1850
-                  </a>
-                </li>
-                <li className="flex items-center gap-3">
-                  <MapPin className="w-4 h-4 flex-shrink-0" />
-                  <span>Santiago, Chile</span>
-                </li>
-              </ul>
-            </div>
-
-            {/* Download */}
-            <div className="space-y-4">
-              <h4 className="font-semibold text-lg">Descargar App</h4>
-              <div className="space-y-3">
-                <a
-                  href="#"
-                  className="flex items-center gap-3 bg-slate-800 hover:bg-slate-700 rounded-xl px-4 py-3 transition-colors"
-                >
-                  <Download className="w-5 h-5" />
-                  <div>
-                    <div className="text-xs text-slate-400">
-                      Disponible en
-                    </div>
-                    <div className="text-sm font-medium">App Store</div>
-                  </div>
-                </a>
-                <a
-                  href="#"
-                  className="flex items-center gap-3 bg-slate-800 hover:bg-slate-700 rounded-xl px-4 py-3 transition-colors"
-                >
-                  <Download className="w-5 h-5" />
-                  <div>
-                    <div className="text-xs text-slate-400">
-                      Consíguelo en
-                    </div>
-                    <div className="text-sm font-medium">Google Play</div>
-                  </div>
-                </a>
-              </div>
-            </div>
-          </div>
-
-          {/* Bottom bar */}
-          <div className="border-t border-slate-800 mt-12 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className="text-sm text-slate-500">
-              © 2025 VigilApp. Todos los derechos reservados.
-            </p>
-            <div className="flex gap-6 text-sm text-slate-500">
-              <a href="#" className="hover:text-white transition-colors">
-                Política de Privacidad
-              </a>
-              <a href="#" className="hover:text-white transition-colors">
-                Términos de Uso
-              </a>
+            <div className="space-y-2">
+              <Button
+                onClick={() => {
+                  setShowLogoutConfirm(false);
+                  toast({ title: "Sesión cerrada", description: "Has cerrado sesión exitosamente" });
+                }}
+                className="w-full bg-red-600 hover:bg-red-700 text-white rounded-xl"
+              >
+                Cerrar Sesión
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowLogoutConfirm(false)}
+                className="w-full rounded-xl"
+              >
+                Cancelar
+              </Button>
             </div>
           </div>
         </div>
-      </footer>
+      )}
 
-      {/* ═══════════════════════════════════════════
-          FLOATING WHATSAPP BUTTON
-          ═══════════════════════════════════════════ */}
-      <a
-        href="https://wa.me/56944401850"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="fixed bottom-6 right-6 z-50 group"
-        aria-label="Contactar por WhatsApp"
-      >
-        {/* Tooltip */}
-        <span className="absolute right-16 top-1/2 -translate-y-1/2 bg-slate-800 text-white text-sm px-4 py-2 rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none shadow-lg">
-          ¡Hablemos por WhatsApp!
-        </span>
-        {/* Pulse ring */}
-        <span className="absolute inset-0 bg-green-500 rounded-full animate-ping opacity-20" />
-        {/* Button */}
-        <span className="relative flex w-14 h-14 items-center justify-center bg-[#25D366] hover:bg-[#20BD5A] rounded-full shadow-lg transition-colors duration-200">
-          <WhatsAppIcon className="w-7 h-7 text-white" />
-        </span>
-      </a>
+      {/* Version */}
+      <p className="text-center text-[10px] text-slate-300 pb-2">VigilApp v2.1.0 • Hecho con <Heart className="w-3 h-3 inline text-red-400" /> en Chile</p>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MAIN PAGE COMPONENT
+   ═══════════════════════════════════════════════════════════ */
+
+export default function HomePage() {
+  const [activeTab, setActiveTab] = useState<TabId>("home");
+  const [sosActive, setSosActive] = useState(false);
+
+  const handleNavigate = useCallback((tab: TabId) => {
+    setActiveTab(tab);
+  }, []);
+
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case "home":
+        return <HomeTab onNavigate={handleNavigate} onSOSActivate={() => setSosActive(true)} />;
+      case "report":
+        return <ReportTab onNavigate={handleNavigate} />;
+      case "map":
+        return <MapTab />;
+      case "alerts":
+        return <AlertsTab />;
+      case "profile":
+        return <ProfileTab />;
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-100 flex justify-center">
+      {/* Phone frame on desktop */}
+      <div className="w-full max-w-md bg-slate-50 min-h-screen relative flex flex-col shadow-none md:shadow-2xl md:rounded-[2.5rem] md:border md:border-slate-200 overflow-hidden">
+        {/* Status bar */}
+        <div className="bg-gradient-to-r from-blue-800 to-blue-600 px-6 pt-3 pb-4 flex-shrink-0">
+          <div className="flex items-center justify-between text-white/80">
+            <span className="text-[10px] font-medium">9:41</span>
+            <div className="flex items-center gap-1.5">
+              <div className="flex items-end gap-0.5">
+                <div className="w-1 h-1.5 bg-white/80 rounded-sm" />
+                <div className="w-1 h-2.5 bg-white/80 rounded-sm" />
+                <div className="w-1 h-3 bg-white/80 rounded-sm" />
+                <div className="w-1 h-4 bg-white/60 rounded-sm" />
+              </div>
+              <svg width="14" height="10" viewBox="0 0 14 10" fill="currentColor" className="opacity-80 ml-1">
+                <path d="M1 8.5h12v1H1zm1-3h10v1H2zm1-3h8v1H3z" />
+                <rect x="0" y="7" width="3" height="3" rx="0.5" fill="currentColor" />
+                <rect x="4" y="4" width="3" height="6" rx="0.5" fill="currentColor" />
+                <rect x="8" y="1" width="3" height="9" rx="0.5" fill="currentColor" />
+              </svg>
+            </div>
+          </div>
+          {/* App bar */}
+          <div className="flex items-center justify-between mt-2">
+            <div className="flex items-center gap-2">
+              <Shield className="w-5 h-5 text-white" />
+              <span className="text-white font-bold text-base">VigilApp</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+              <span className="text-[11px] text-white/70">En línea</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Tab content */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide">
+          <div className="p-4 pt-4">
+            {renderTabContent()}
+          </div>
+        </div>
+
+        {/* Bottom Navigation */}
+        <div className="flex-shrink-0 bg-white border-t border-slate-200 pb-[env(safe-area-inset-bottom)]">
+          <div className="flex items-center justify-around px-2 pt-2 pb-1">
+            {TABS.map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl transition-all active:scale-95 min-w-[56px] ${
+                    isActive ? "text-blue-600" : "text-slate-400"
+                  }`}
+                >
+                  <div className={`p-1.5 rounded-xl transition-colors ${isActive ? "bg-blue-50" : ""}`}>
+                    <tab.icon className={`w-5 h-5 transition-all ${isActive ? "stroke-[2.5]" : "stroke-[1.5]"}`} />
+                  </div>
+                  <span className={`text-[10px] font-medium ${isActive ? "font-semibold" : ""}`}>
+                    {tab.label}
+                  </span>
+                  {tab.id === "alerts" && (
+                    <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-red-500 rounded-full" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          {/* Home indicator bar */}
+          <div className="flex justify-center pb-1.5">
+            <div className="w-32 h-1 bg-slate-200 rounded-full" />
+          </div>
+        </div>
+      </div>
+
+      {/* SOS Overlay */}
+      {sosActive && <SOSOverlay onCancel={() => setSosActive(false)} />}
     </div>
   );
 }
