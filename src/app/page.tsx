@@ -450,6 +450,29 @@ function LoginScreen({ onLogin }: { onLogin: (user: UserProfile) => void }) {
               ¿Olvidaste tu contraseña?
             </button>
           </div>
+
+          {/* Demo credentials hint */}
+          <div className="bg-white/5 rounded-xl p-3 border border-white/10 space-y-2">
+            <p className="text-blue-200 text-[10px] font-semibold text-center">Cuentas de prueba (contraseña: cyj2025)</p>
+            <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+              <div className="bg-white/5 rounded-lg px-2 py-1.5">
+                <p className="text-blue-100 font-medium">Super Admin</p>
+                <p className="text-blue-300/60">roberto.silva@cyj.cl</p>
+              </div>
+              <div className="bg-white/5 rounded-lg px-2 py-1.5">
+                <p className="text-blue-100 font-medium">Admin</p>
+                <p className="text-blue-300/60">maria.lopez@cyj.cl</p>
+              </div>
+              <div className="bg-white/5 rounded-lg px-2 py-1.5">
+                <p className="text-blue-100 font-medium">Guardia</p>
+                <p className="text-blue-300/60">juan.torres@cyj.cl</p>
+              </div>
+              <div className="bg-white/5 rounded-lg px-2 py-1.5">
+                <p className="text-blue-100 font-medium">Residente</p>
+                <p className="text-blue-300/60">carlos.perez@email.com</p>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Community info */}
@@ -1058,6 +1081,7 @@ function RolesTab({
   const [newUnit, setNewUnit] = useState("");
   const [newPhone, setNewPhone] = useState("");
   const [newEmail, setNewEmail] = useState("");
+  const [newPassword, setNewPassword] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
   const filteredUsers = users.filter((u) => {
@@ -1076,24 +1100,20 @@ function RolesTab({
     if (!newEmail.trim()) { toast({ title: "Email requerido", variant: "destructive" }); return; }
     setIsCreating(true);
     try {
-      const roleData = ROLES.find((r) => r.id === newRole);
-      const newUser: SampleUser = {
-        id: `u_${Date.now()}`,
-        name: newName.trim(),
-        role: newRole as RoleId,
-        roleName: roleData?.name || "Usuario",
-        tower: newTower || "N/A",
-        unit: newUnit || "N/A",
-        phone: newPhone.trim(),
-        email: newEmail.trim(),
-        online: true,
-        memberSince: new Date().getFullYear().toString(),
-        avatarInitial: newName.trim().charAt(0).toUpperCase(),
-      };
-      onUsersChange([...users, newUser]);
-      toast({ title: "Usuario creado", description: `${newUser.name} ha sido agregado.` });
-      setNewName(""); setNewRole(""); setNewTower(""); setNewUnit(""); setNewPhone(""); setNewEmail("");
-      setShowCreateUser(false);
+      const res = await fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newName.trim(), role: newRole, tower: newTower, unit: newUnit, phone: newPhone.trim(), email: newEmail.trim(), password: newPassword || undefined }),
+      });
+      const data = await res.json();
+      if (data.success && data.user) {
+        onUsersChange([...users, data.user as SampleUser]);
+        toast({ title: "Usuario creado", description: `${data.user.name} ha sido agregado. Contraseña: cyj2025` });
+        setNewName(""); setNewRole(""); setNewTower(""); setNewUnit(""); setNewPhone(""); setNewEmail(""); setNewPassword("");
+        setShowCreateUser(false);
+      } else {
+        toast({ title: "Error", description: data.error || "No se pudo crear el usuario.", variant: "destructive" });
+      }
     } catch {
       toast({ title: "Error", description: "No se pudo crear el usuario.", variant: "destructive" });
     } finally {
@@ -1102,26 +1122,50 @@ function RolesTab({
   };
 
   /* ─── Change Role ─── */
-  const handleChangeRole = (userId: string, newRoleId: string) => {
+  const handleChangeRole = async (userId: string, newRoleId: string) => {
     const roleData = ROLES.find((r) => r.id === newRoleId);
     if (!roleData) return;
-    const updated = users.map((u) => u.id === userId ? { ...u, role: newRoleId as RoleId, roleName: roleData.name } : u);
-    onUsersChange(updated);
-    setShowRoleSelector(false);
-    if (selectedUser) {
-      setSelectedUser({ ...selectedUser, role: newRoleId as RoleId, roleName: roleData.name });
+    try {
+      const res = await fetch("/api/users", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, role: newRoleId }),
+      });
+      const data = await res.json();
+      if (data.success && data.user) {
+        const updated = users.map((u) => u.id === userId ? { ...u, role: newRoleId as RoleId, roleName: roleData.name } : u);
+        onUsersChange(updated);
+        setShowRoleSelector(false);
+        if (selectedUser) {
+          setSelectedUser({ ...selectedUser, role: newRoleId as RoleId, roleName: roleData.name });
+        }
+        toast({ title: "Rol actualizado", description: `El rol de ${selectedUser?.name} ha sido cambiado a ${roleData.name}.` });
+      }
+    } catch {
+      toast({ title: "Error", description: "No se pudo actualizar el rol.", variant: "destructive" });
     }
-    toast({ title: "Rol actualizado", description: `El rol de ${selectedUser?.name} ha sido cambiado a ${roleData.name}.` });
   };
 
   /* ─── Delete User ─── */
-  const handleDeleteUser = () => {
+  const handleDeleteUser = async () => {
     if (!selectedUser) return;
-    const updated = users.filter((u) => u.id !== selectedUser.id);
-    onUsersChange(updated);
-    setShowDeleteConfirm(false);
-    setSelectedUser(null);
-    toast({ title: "Usuario eliminado", description: `${selectedUser.name} ha sido eliminado.` });
+    try {
+      const res = await fetch("/api/users", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: selectedUser.id }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        const updated = users.filter((u) => u.id !== selectedUser.id);
+        onUsersChange(updated);
+        setShowDeleteConfirm(false);
+        setSelectedUser(null);
+        toast({ title: "Usuario eliminado", description: `${selectedUser.name} ha sido eliminado.` });
+      }
+    } catch {
+      toast({ title: "Error", description: "No se pudo eliminar el usuario.", variant: "destructive" });
+    }
   };
 
   return (
@@ -1265,6 +1309,11 @@ function RolesTab({
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-slate-600">Email *</Label>
                 <Input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} type="email" placeholder="usuario@email.com" className="rounded-xl h-11" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-600">Contraseña</Label>
+                <Input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} type="text" placeholder="cyj2025" className="rounded-xl h-11" />
+                <p className="text-[10px] text-slate-400">Si dejas vacío, la contraseña será: cyj2025</p>
               </div>
             </div>
             <div className="space-y-2">

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sampleUsers } from "@/lib/mock-data";
+import { findUserByIdentifier } from "@/lib/store";
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,29 +8,24 @@ export async function POST(request: NextRequest) {
 
     if (!identifier || !password) {
       return NextResponse.json(
-        { success: false, error: "Email, teléfono y contraseña son requeridos" },
+        { success: false, error: "Email/teléfono y contraseña son requeridos" },
         { status: 400 }
       );
     }
 
-    const idLower = identifier.toLowerCase().trim();
-    const user = sampleUsers.find(
-      (u) =>
-        u.email.toLowerCase() === idLower ||
-        u.phone.replace(/\s/g, "") === idLower.replace(/\s/g, "")
-    );
+    const user = findUserByIdentifier(identifier);
 
     if (!user) {
       return NextResponse.json(
-        { success: false, error: "Credenciales inválidas. Usuario no encontrado." },
+        { success: false, error: "Usuario no encontrado. Verifica tus credenciales." },
         { status: 401 }
       );
     }
 
-    // Simple password check for testing (accept any non-empty password for now)
-    if (password.length < 1) {
+    // Password validation
+    if (password !== user.password) {
       return NextResponse.json(
-        { success: false, error: "Contraseña inválida" },
+        { success: false, error: "Contraseña incorrecta" },
         { status: 401 }
       );
     }
