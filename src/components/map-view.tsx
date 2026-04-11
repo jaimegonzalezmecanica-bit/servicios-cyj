@@ -11,19 +11,9 @@ import type { IncidentMarker } from "@/lib/mock-data";
   Exact coordinates from maptons.com
 */
 const MAP_CENTER: L.LatLngExpression = [-33.3276, -70.7630];
-const MAP_ZOOM = 16;
+const MAP_ZOOM = 17;
 
-/* Tower positions spread around the condominium grounds */
-const TOWER_POSITIONS: Record<string, L.LatLngExpression> = {
-  A: [-33.3262, -70.7606],
-  B: [-33.3262, -70.7616],
-  C: [-33.3272, -70.7626],
-  D: [-33.3282, -70.7616],
-  E: [-33.3288, -70.7606],
-  F: [-33.3276, -70.7642],
-};
-
-/* Incident positions relative to towers */
+/* Incident positions spread around the condominium grounds */
 const INCIDENT_POSITIONS: Record<string, L.LatLngExpression> = {
   m1: [-33.3265, -70.7613],
   m2: [-33.3268, -70.7619],
@@ -80,31 +70,31 @@ export default function MapView({ incidents, filter, onSelectMarker }: MapViewPr
       maxZoom: 19,
     }).addTo(map);
 
-    /* Tower markers */
-    Object.entries(TOWER_POSITIONS).forEach(([id, pos]) => {
-      const towerIcon = L.divIcon({
+    /* Condominium markers (8 micro-condominios) */
+    const condominios = [
+      { name: "Flamencos",  pos: [-33.3262, -70.7606] as L.LatLngExpression, type: "casas" },
+      { name: "Faisanes",   pos: [-33.3265, -70.7616] as L.LatLngExpression, type: "casas" },
+      { name: "Garzas",     pos: [-33.3268, -70.7626] as L.LatLngExpression, type: "casas" },
+      { name: "Gaviotas",   pos: [-33.3272, -70.7632] as L.LatLngExpression, type: "casas" },
+      { name: "Becacinas",  pos: [-33.3276, -70.7638] as L.LatLngExpression, type: "casas" },
+      { name: "Bandurrias", pos: [-33.3280, -70.7642] as L.LatLngExpression, type: "casas" },
+      { name: "Albatros",   pos: [-33.3284, -70.7646] as L.LatLngExpression, type: "casas" },
+      { name: "Canquén",    pos: [-33.3288, -70.7650] as L.LatLngExpression, type: "deptos" },
+    ];
+
+    condominios.forEach(({ name, pos, type }) => {
+      const bg = type === "deptos" ? "#1e40af" : "#047857";
+      const label = type === "deptos" ? "Depto" : "Casas";
+      const cIcon = L.divIcon({
         className: "",
-        html: `<div style="
-          background: #0f4c81;
-          color: white;
-          border-radius: 8px;
-          width: 32px;
-          height: 32px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: 800;
-          font-size: 14px;
-          border: 2px solid white;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-        ">${id}</div>`,
-        iconSize: [32, 32],
-        iconAnchor: [16, 16],
+        html: `<div style="background:${bg};color:white;border-radius:10px;padding:3px 8px;font-size:11px;font-weight:700;border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3);white-space:nowrap;display:flex;align-items:center;gap:4px;">${name}</div>`,
+        iconSize: [100, 24],
+        iconAnchor: [50, 12],
       });
 
-      L.marker(pos, { icon: towerIcon })
+      L.marker(pos, { icon: cIcon })
         .addTo(map)
-        .bindPopup(`<strong>Torre ${id}</strong><br>Condominio Laguna Norte<br>Av. La Montaña Norte 3650`);
+        .bindPopup(`<strong>${name}</strong><br>${label}<br>Condominio Laguna Norte<br>Av. La Montaña Norte 3650`);
     });
 
     /* Condominium perimeter (approximate geofence for Laguna Norte) */
