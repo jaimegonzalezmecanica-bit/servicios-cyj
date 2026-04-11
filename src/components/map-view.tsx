@@ -4,16 +4,11 @@ import React, { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
-/*
-  Condominio Laguna Norte
-  Av. La Montaña Norte 3650, Valle Grande, Lampa, Chile
-*/
 const MAP_CENTER: L.LatLngExpression = [-33.3273, -70.7628];
 const MAP_ZOOM = 17;
 
 const DEFAULT_ENTRANCE: L.LatLngExpression = [-33.3298, -70.7630];
 
-/* Fallback positions */
 const DEFAULT_POSITIONS: Record<string, L.LatLngExpression> = {
   faisanes:   [-33.3258, -70.7618],
   garzas:     [-33.3262, -70.7628],
@@ -25,16 +20,15 @@ const DEFAULT_POSITIONS: Record<string, L.LatLngExpression> = {
   canquen:    [-33.3294, -70.7630],
 };
 
-/* Unique colors for each micro-condominio */
 const BARRIO_COLORS: Record<string, string> = {
-  flamencos:  "#e11d48",  // rose
-  faisanes:   "#d97706",  // amber
-  garzas:     "#0d9488",  // teal
-  gaviotas:   "#0891b2",  // cyan
-  becacinas:  "#65a30d",  // lime
-  bandurrias: "#7c3aed",  // violet
-  albatros:   "#475569",  // slate
-  canquen:    "#1d4ed8",  // blue
+  flamencos:  "#e11d48",
+  faisanes:   "#d97706",
+  garzas:     "#0d9488",
+  gaviotas:   "#0891b2",
+  becacinas:  "#65a30d",
+  bandurrias: "#7c3aed",
+  albatros:   "#475569",
+  canquen:    "#1d4ed8",
 };
 
 export interface CondominioMapData {
@@ -45,12 +39,19 @@ export interface CondominioMapData {
   lng?: number;
 }
 
+export interface PerimeterPoint {
+  lat: number;
+  lng: number;
+}
+
 interface MapViewProps {
   condominios?: CondominioMapData[];
   editMode?: boolean;
   onPositionChange?: (id: string, lat: number, lng: number) => void;
   entrance?: { lat: number; lng: number };
   onEntranceChange?: (lat: number, lng: number) => void;
+  perimeter?: PerimeterPoint[];
+  onPerimeterChange?: (points: PerimeterPoint[]) => void;
 }
 
 export default function MapView({
@@ -59,13 +60,27 @@ export default function MapView({
   onPositionChange,
   entrance,
   onEntranceChange,
+  perimeter,
+  onPerimeterChange,
 }: MapViewProps) {
   const mapRef = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const condominioMarkersRef = useRef<Map<string, L.Marker>>(new Map());
   const entranceMarkerRef = useRef<L.Marker | null>(null);
+  const polygonRef = useRef<L.Polygon | null>(null);
+  const vertexMarkersRef = useRef<Map<number, L.Marker>>(new Map());
 
-  /* Init map (runs once) */
+  /* Default perimeter */
+  const DEFAULT_PERIMETER: PerimeterPoint[] = [
+    { lat: -33.3250, lng: -70.7610 },
+    { lat: -33.3250, lng: -70.7650 },
+    { lat: -33.3298, lng: -70.7650 },
+    { lat: -33.3298, lng: -70.7610 },
+  ];
+
+  const currentPerimeter = perimeter || DEFAULT_PERIMETER;
+
+  /* Init map */
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
@@ -80,21 +95,6 @@ export default function MapView({
       maxZoom: 19,
     }).addTo(map);
 
-    /* Perimeter */
-    const perimeter = [
-      [-33.3250, -70.7610],
-      [-33.3250, -70.7650],
-      [-33.3298, -70.7650],
-      [-33.3298, -70.7610],
-    ];
-    L.polygon(perimeter, {
-      color: "#0f4c81",
-      weight: 2,
-      dashArray: "8, 6",
-      fillColor: "#0f4c81",
-      fillOpacity: 0.04,
-    }).addTo(map);
-
     mapRef.current = map;
 
     return () => {
@@ -103,12 +103,113 @@ export default function MapView({
     };
   }, []);
 
+  /* Render polygon + vertex markers */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    /* Remove old polygon */
+    if (polygonRef.current) {
+      map.removeLayer(polygonRef.current);
+      polygonRef.current = null;
+    }
+    vertexMarkersRef.current.forEach((m) => map.removeLayer(m));
+    vertexMarkersRef.current.clear();
+
+    const latLngs = currentPerimeter.map((p) => [p.lat, p.lng] as L.LatLngExpression);
+
+    /* Draw polygon */
+    polygonRef.current = L.polygon(latLngs, {
+      color: editMode ? "#dc2626" : "#0f4c81",
+      weight: editMode ? 3 : 2,
+      dashArray: editMode ? undefined : "8, 6",
+      fillColor: editMode ? "#dc2626" : "#0f4c81",
+      fillOpacity: editMode ? 0.06 : 0.04,
+    }).addTo(map);
+
+    /* In edit mode: add vertex markers */
+    if (editMode && onPerimeterChange) {
+      currentPerimeter.forEach((pt, idx) => {
+        const vIcon = L.divIcon({
+          className: "",
+          html: `<div style="
+            width:16px;height:16px;
+            background:#dc2626;
+            border:2px solid white;
+            border-radius:50%;
+            box-shadow:0 1px 4px rgba(0,0,0,0.4);
+            cursor:grab;
+          "></div>`,
+          iconSize: [16, 16],
+          iconAnchor: [8, 8],
+        });
+
+        const vMarker = L.marker([pt.lat, pt.lng], {
+          icon: vIcon,
+          draggable: true,
+          autoPan: true,
+          zIndexOffset: 2000,
+        });
+
+        vMarker.on("drag", () => {
+          const pos = vMarker.getLatLng();
+          const updated = [...currentPerimeter];
+          updated[idx] = { lat: pos.lat, lng: pos.lng };
+          onPerimeterChange(updated);
+        });
+
+        /* Double-click to remove vertex (min 3) */
+        if (currentPerimeter.length > 3) {
+          vMarker.on("dblclick", () => {
+            L.DomEvent.stopPropagation(vMarker);
+            const updated = currentPerimeter.filter((_, i) => i !== idx);
+            onPerimeterChange(updated);
+          });
+        }
+
+        vMarker.addTo(map);
+        vertexMarkersRef.current.set(idx, vMarker);
+      });
+
+      /* Click on polygon edge to add vertex */
+      polygonRef.current.on("click", (e: L.LeafletMouseEvent) => {
+        const { lat, lng } = e.latlng;
+
+        /* Find closest edge */
+        let bestIdx = 0;
+        let bestDist = Infinity;
+        for (let i = 0; i < currentPerimeter.length; i++) {
+          const j = (i + 1) % currentPerimeter.length;
+          const mx = (currentPerimeter[i].lat + currentPerimeter[j].lat) / 2;
+          const my = (currentPerimeter[i].lng + currentPerimeter[j].lng) / 2;
+          const d = Math.hypot(lat - mx, lng - my);
+          if (d < bestDist) {
+            bestDist = d;
+            bestIdx = j;
+          }
+        }
+
+        const updated = [...currentPerimeter];
+        updated.splice(bestIdx, 0, { lat, lng });
+        onPerimeterChange(updated);
+      });
+    }
+
+    return () => {
+      if (polygonRef.current) {
+        map.removeLayer(polygonRef.current);
+        polygonRef.current = null;
+      }
+      vertexMarkersRef.current.forEach((m) => map.removeLayer(m));
+      vertexMarkersRef.current.clear();
+    };
+  }, [currentPerimeter, editMode, onPerimeterChange]);
+
   /* Render entrance marker */
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
-    /* Remove old entrance marker */
     if (entranceMarkerRef.current) {
       map.removeLayer(entranceMarkerRef.current);
       entranceMarkerRef.current = null;
@@ -133,7 +234,7 @@ export default function MapView({
         box-shadow:0 2px 8px rgba(0,0,0,0.3);
         white-space:nowrap;
         ${editMode ? "cursor:grab;" : ""}
-      ">${editMode ? "&#x1F6AA; " : "&#x1F6AA; "}ENTRADA</div>`,
+      ">&#x1F6AA; ENTRADA</div>`,
       iconSize: [editMode ? 110 : 80, 24],
       iconAnchor: [editMode ? 55 : 40, 12],
     });
@@ -154,6 +255,13 @@ export default function MapView({
 
     marker.addTo(map).bindPopup("<strong>Acceso Principal</strong><br>Av. La Montaña Norte 3650");
     entranceMarkerRef.current = marker;
+
+    return () => {
+      if (entranceMarkerRef.current) {
+        map.removeLayer(entranceMarkerRef.current);
+        entranceMarkerRef.current = null;
+      }
+    };
   }, [entrance, editMode, onEntranceChange]);
 
   /* Render condominio markers */
@@ -161,7 +269,6 @@ export default function MapView({
     const map = mapRef.current;
     if (!map) return;
 
-    /* Remove old markers */
     condominioMarkersRef.current.forEach((m) => map.removeLayer(m));
     condominioMarkersRef.current.clear();
 
@@ -216,6 +323,11 @@ export default function MapView({
 
       condominioMarkersRef.current.set(c.id, marker);
     });
+
+    return () => {
+      condominioMarkersRef.current.forEach((m) => map.removeLayer(m));
+      condominioMarkersRef.current.clear();
+    };
   }, [condominios, editMode, onPositionChange]);
 
   return <div ref={containerRef} className="w-full h-full rounded-2xl" />;

@@ -965,6 +965,12 @@ function MapTab({ currentRole, towers, onTowersChange }: { currentRole: any; tow
   const [saving, setSaving] = useState(false);
   const [savedToast, setSavedToast] = useState(false);
   const [entrance, setEntrance] = useState({ lat: -33.3298, lng: -70.7630 });
+  const [perimeter, setPerimeter] = useState([
+    { lat: -33.3250, lng: -70.7610 },
+    { lat: -33.3250, lng: -70.7650 },
+    { lat: -33.3298, lng: -70.7650 },
+    { lat: -33.3298, lng: -70.7610 },
+  ]);
 
   const canEdit = currentRole?.permissions?.canViewStats || currentRole?.role === "super_admin" || currentRole?.role === "admin";
 
@@ -988,6 +994,10 @@ function MapTab({ currentRole, towers, onTowersChange }: { currentRole: any; tow
     setEntrance({ lat, lng });
     setSavedToast(true);
     setTimeout(() => setSavedToast(false), 2500);
+  }, []);
+
+  const handlePerimeterChange = useCallback((points: { lat: number; lng: number }[]) => {
+    setPerimeter(points);
   }, []);
 
   return (
@@ -1014,9 +1024,19 @@ function MapTab({ currentRole, towers, onTowersChange }: { currentRole: any; tow
         </div>
       </div>
       {editMode && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mt-2 flex items-center gap-2">
-          <Pencil className="w-4 h-4 text-amber-600 flex-shrink-0" />
-          <p className="text-[11px] text-amber-800 font-medium">Arrastra los marcadores rojos para reposicionar cada barrio y la entrada. Los cambios se guardan automáticamente.</p>
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mt-2 space-y-1">
+          <div className="flex items-center gap-2">
+            <Pencil className="w-4 h-4 text-amber-600 flex-shrink-0" />
+            <p className="text-[11px] text-amber-800 font-medium">Arrastra los marcadores rojos para reposicionar barrios, entrada y vértices del cuadrante.</p>
+          </div>
+          <div className="flex items-start gap-2 pl-6">
+            <span className="text-[10px] text-amber-700">&#x271A;</span>
+            <p className="text-[10px] text-amber-700">Click en el borde del cuadrante para agregar un vértice.</p>
+          </div>
+          <div className="flex items-start gap-2 pl-6">
+            <span className="text-[10px] text-amber-700">&#x2716;</span>
+            <p className="text-[10px] text-amber-700">Doble click en un vértice rojo para eliminarlo (mínimo 3).</p>
+          </div>
         </div>
       )}
       <div className="relative h-[420px] rounded-2xl overflow-hidden shadow-sm border border-slate-200 mt-3">
@@ -1026,6 +1046,8 @@ function MapTab({ currentRole, towers, onTowersChange }: { currentRole: any; tow
           onPositionChange={handlePositionChange}
           entrance={entrance}
           onEntranceChange={handleEntranceChange}
+          perimeter={perimeter}
+          onPerimeterChange={handlePerimeterChange}
         />
         {saving && (
           <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-sm rounded-xl px-4 py-2 shadow-lg z-[1000] flex items-center gap-2">
