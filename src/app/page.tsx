@@ -92,6 +92,7 @@ import {
   type SampleUser,
 } from "@/lib/mock-data";
 import { enableOfflineMode, initOfflineData } from "@/lib/offline-api";
+import { getCurrentPosition, requestLocationPermission } from "@/lib/gps-location";
 
 /* Enable offline mode (intercepts all /api/* fetch calls to use localStorage) */
 if (typeof window !== "undefined") {
@@ -668,7 +669,7 @@ function HomeTab({
   const handleSOS = () => {
     setShowSOSConfirm(false);
     onSOSActivate();
-    toast({ title: "Alerta SOS Activada", description: "Tu ubicación ha sido compartida con la comunidad." });
+    toast({ title: "Alerta SOS Activada", description: "Obteniendo ubicación GPS y compartiendo con la comunidad..." });
   };
 
   const quickActions = [
@@ -763,7 +764,7 @@ function HomeTab({
                 <AlertTriangle className="w-8 h-8 text-red-600" />
               </div>
               <h3 className="text-lg font-bold text-slate-900">¿Activar alerta de emergencia?</h3>
-              <p className="text-sm text-slate-500">Tu ubicación actual será compartida con todos los miembros de la comunidad y el administrador.</p>
+              <p className="text-sm text-slate-500">Tu ubicación GPS actual será georeferenciada y compartida con todos los miembros de la comunidad y el administrador. Se solicitará permiso de ubicación si es necesario.</p>
             </div>
             <div className="space-y-2">
               <Button onClick={handleSOS} className="w-full bg-red-600 hover:bg-red-700 text-white py-6 text-base font-semibold rounded-xl">Activar SOS</Button>
@@ -1012,7 +1013,7 @@ export interface SOSData {
   time: string;
 }
 
-function MapTab({ currentRole, towers, onTowersChange, sosAlert, activeSOSAlerts }: { currentRole: any; towers: any[]; onTowersChange: (t: any[]) => void; sosAlert?: SOSData | null; activeSOSAlerts?: any[] }) {
+function MapTab({ currentRole, towers, onTowersChange, sosAlert, activeSOSAlerts, mapTarget }: { currentRole: any; towers: any[]; onTowersChange: (t: any[]) => void; sosAlert?: SOSData | null; activeSOSAlerts?: any[]; mapTarget?: { lat: number; lng: number } | null }) {
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedToast, setSavedToast] = useState(false);
@@ -1227,6 +1228,7 @@ function MapTab({ currentRole, towers, onTowersChange, sosAlert, activeSOSAlerts
           perimeterEditMode={perimeterMode}
           sosAlert={sosAlert}
           activeSOSAlerts={activeSOSAlerts}
+          mapTarget={mapTarget}
         />
         {saving && (
           <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-sm rounded-xl px-4 py-2 shadow-lg z-[1000] flex items-center gap-2">
@@ -1249,7 +1251,7 @@ function MapTab({ currentRole, towers, onTowersChange, sosAlert, activeSOSAlerts
    TAB 4: ALERTS (stateful)
    ═══════════════════════════════════════════════════════════ */
 
-function AlertsTab({ alerts, currentRole, onAlertsChange }: { alerts: Alert[]; currentRole?: Role; onAlertsChange: (alerts: Alert[]) => void }) {
+function AlertsTab({ alerts, currentRole, onAlertsChange, onNavigateToMapAlert }: { alerts: Alert[]; currentRole?: Role; onAlertsChange: (alerts: Alert[]) => void; onNavigateToMapAlert?: (lat: number, lng: number) => void }) {
   const [selectedFilter, setSelectedFilter] = useState("Todas");
   const [changingId, setChangingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -1361,6 +1363,18 @@ function AlertsTab({ alerts, currentRole, onAlertsChange }: { alerts: Alert[]; c
                           <p className="text-[10px] font-bold text-slate-600 uppercase tracking-wide">Ubicación GPS</p>
                           <p className="text-xs text-slate-700 font-mono">Lat: {alert.lat.toFixed(6)}</p>
                           <p className="text-xs text-slate-700 font-mono">Lng: {alert.lng.toFixed(6)}</p>
+                          {onNavigateToMapAlert && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onNavigateToMapAlert(alert.lat, alert.lng);
+                              }}
+                              className="mt-2 w-full flex items-center justify-center gap-2 bg-[#0f4c81] hover:bg-[#0a3a66] text-white text-xs font-bold py-2.5 px-4 rounded-lg transition-colors active:scale-[0.98]"
+                            >
+                              <Map className="w-4 h-4" />
+                              Ver Ubicación en el Mapa
+                            </button>
+                          )}
                         </div>
                       )}
                     </>
@@ -2656,6 +2670,7 @@ export default function HomePage() {
   const [sosActive, setSosActive] = useState(false);
   const [sosAlert, setSosAlert] = useState<{ lat: number; lng: number; userName: string; conjunto: string; time: string } | null>(null);
   const [incomingSOS, setIncomingSOS] = useState<{ lat: number; lng: number; userName: string; conjunto: string; time: string } | null>(null);
+  const [mapTargetAlert, setMapTargetAlert] = useState<{ lat: number; lng: number } | null>(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [showInstallGuide, setShowInstallGuide] = useState(false);
   const deferredPrompt = useRef<any>(null);
@@ -2720,7 +2735,7 @@ export default function HomePage() {
   }, []);
 
   /* ─── SOS ACTIVATION HANDLER ─── */
-  const handleSOSActivate = useCallback(() => {
+  const handleSOSActivate = useCallback(async () => {
     if (!currentUser) return;
     setSosActive(true);
     const userName = currentUser.name || "Residente";
@@ -2751,14 +2766,20 @@ export default function HomePage() {
       }).catch(() => { /* silent */ });
     };
 
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => setSOSData(pos.coords.latitude, pos.coords.longitude),
-        () => setSOSData(-33.3298, -70.7630),
-        { enableHighAccuracy: true, timeout: 10000 }
-      );
-    } else {
-      setSOSData(-33.3298, -70.7630);
+    // Request permission and get real GPS position
+    try {
+      const hasPermission = await requestLocationPermission();
+      if (hasPermission) {
+        const pos = await getCurrentPosition();
+        console.log(`[SOS] GPS position: ${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)} (accuracy: ${Math.round(pos.accuracy)}m)`);
+        setSOSData(pos.lat, pos.lng);
+      } else {
+        console.warn("[SOS] Location permission denied, using fallback position");
+        setSOSData(-33.3273, -70.7628);
+      }
+    } catch (error) {
+      console.error("[SOS] GPS error:", error);
+      setSOSData(-33.3273, -70.7628);
     }
   }, [currentUser]);
 
@@ -2862,6 +2883,19 @@ export default function HomePage() {
     setCurrentRole(user.role);
     setActiveTab("home");
     setIsLoggedIn(true);
+
+    // Request location permission on first login (for GPS SOS alerts)
+    requestLocationPermission().then((granted) => {
+      if (granted) {
+        console.log("[App] Location permission granted");
+        // Pre-fetch GPS to warm up the location cache
+        getCurrentPosition().then((pos) => {
+          console.log(`[App] Initial GPS: ${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}`);
+        }).catch(() => { /* silent */ });
+      } else {
+        console.warn("[App] Location permission not granted - SOS will use fallback position");
+      }
+    });
   }, []);
 
   const handleLogout = useCallback(() => {
@@ -2878,6 +2912,14 @@ export default function HomePage() {
 
   const handleNavigate = useCallback((tab: TabId) => {
     setActiveTab(tab);
+  }, []);
+
+  /* ─── Navigate to map to view alert location ─── */
+  const handleNavigateToMapAlert = useCallback((lat: number, lng: number) => {
+    setMapTargetAlert({ lat, lng });
+    setActiveTab("map");
+    // Clear target after map has time to fly to it
+    setTimeout(() => setMapTargetAlert(null), 5000);
   }, []);
 
   /* ─── Report submitted callback ─── */
@@ -2906,8 +2948,8 @@ export default function HomePage() {
     switch (activeTab) {
       case "home": return <HomeTab currentUser={currentUser} currentRole={role} alerts={alerts} announcements={announcementsList} onNavigate={handleNavigate} onSOSActivate={handleSOSActivate} />;
       case "report": return <ReportTab onNavigate={handleNavigate} onReportSubmitted={handleReportSubmitted} />;
-      case "map": return <MapTab currentRole={role} towers={towersList} onTowersChange={setTowersList} sosAlert={sosAlert || incomingSOS} activeSOSAlerts={activeSOSAlerts} />;
-      case "alerts": return <AlertsTab alerts={alerts} currentRole={role} onAlertsChange={setAlerts} />;
+      case "map": return <MapTab currentRole={role} towers={towersList} onTowersChange={setTowersList} sosAlert={sosAlert || incomingSOS} activeSOSAlerts={activeSOSAlerts} mapTarget={mapTargetAlert} />;
+      case "alerts": return <AlertsTab alerts={alerts} currentRole={role} onAlertsChange={setAlerts} onNavigateToMapAlert={handleNavigateToMapAlert} />;
       case "roles": return <RolesTab currentUser={currentUser} currentRole={role} users={users} onUsersChange={setUsers} />;
       case "admin": return <AdminTab currentRole={role} alerts={alerts} announcements={announcementsList} onAnnouncementsChange={setAnnouncementsList} guards={guardsList} onGuardsChange={setGuardsList} towers={towersList} onTowersChange={setTowersList} currentUser={currentUser} />;
       case "profile": return <ProfileTab currentUser={currentUser} currentRole={role} onLogout={handleLogout} onSwitchRole={handleSwitchRole} />;

@@ -66,6 +66,7 @@ interface MapViewProps {
   perimeterEditMode?: PerimeterEditMode;
   sosAlert?: { lat: number; lng: number; userName: string; conjunto: string; time: string } | null;
   activeSOSAlerts?: SOSAlertData[];
+  mapTarget?: { lat: number; lng: number } | null;
 }
 
 /* localStorage helpers */
@@ -119,6 +120,7 @@ export default function MapView({
   perimeterEditMode = "none",
   sosAlert,
   activeSOSAlerts = [],
+  mapTarget,
 }: MapViewProps) {
   /* ─── Leaflet layer refs ─── */
   const mapRef = useRef<L.Map | null>(null);
@@ -398,6 +400,14 @@ export default function MapView({
     entranceMarkerRef.current = marker;
     return () => { if (entranceMarkerRef.current) { map.removeLayer(entranceMarkerRef.current); entranceMarkerRef.current = null; } };
   }, [currentEntrance, editMode, onEntranceChange]);
+
+  /* ─── FLY TO MAP TARGET (when navigating from alerts list) ─── */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapTarget) return;
+    const pos: L.LatLngExpression = [mapTarget.lat, mapTarget.lng];
+    map.flyTo(pos, Math.max(map.getZoom(), 19), { duration: 1.5 });
+  }, [mapTarget]);
 
   /* ─── SOS ALERT MARKER (live/temporary — from current session) ─── */
   useEffect(() => {
