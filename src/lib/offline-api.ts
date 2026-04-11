@@ -353,6 +353,77 @@ function handleProfile(body: Record<string, unknown>): Response {
   return jsonResponse({ success: true });
 }
 
+function handleRegister(body: Record<string, unknown>): Response {
+  const users = getLocal<(SampleUser & { password: string })>(KEYS.users);
+  const email = String(body.email || "").toLowerCase().trim();
+  const phone = String(body.phone || "").replace(/\s/g, "");
+  
+  if (!email || !phone) {
+    return jsonResponse({ success: false, error: "Email y teléfono son requeridos" }, 400);
+  }
+  
+  // Check for duplicates
+  const exists = users.find(
+    (u) => u.email.toLowerCase() === email || u.phone.replace(/\s/g, "") === phone
+  );
+  if (exists) {
+    return jsonResponse({ success: false, error: "Ya existe una cuenta con ese email o teléfono" }, 409);
+  }
+
+  const newUser: SampleUser & { password: string } = {
+    id: `u${Date.now()}`,
+    name: String(body.name || "Sin nombre"),
+    role: "residente_guardia" as any,
+    roleName: "Residente",
+    conjunto: String(body.conjunto || "general"),
+    unit: String(body.unit || "-"),
+    phone: String(body.phone || ""),
+    email: String(body.email || ""),
+    online: true,
+    memberSince: new Date().getFullYear().toString(),
+    avatarInitial: String(body.name || "R").charAt(0).toUpperCase(),
+    password: String(body.password || "cyj2025"),
+  };
+
+  users.push(newUser);
+  setLocal(KEYS.users, users);
+
+  // Return user without password
+  const { password: _p, ...safeUser } = newUser;
+  return jsonResponse({ success: true, user: safeUser });
+}
+
+function handleResetPassword(body: Record<string, unknown>): Response {
+  const users = getLocal<(SampleUser & { password: string })>(KEYS.users);
+  const email = String(body.email || "").toLowerCase().trim();
+
+  if (!email) {
+    return jsonResponse({ success: false, error: "Email es requerido" }, 400);
+  }
+
+  const user = users.find((u) => u.email.toLowerCase() === email);
+  if (!user) {
+    // Don't reveal if email exists for security
+    return jsonResponse({ success: true, message: "Si el email está registrado, se enviará una nueva contraseña" });
+  }
+
+  // Generate new password
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  let newPass = "";
+  for (let i = 0; i < 8; i++) { newPass += chars.charAt(Math.floor(Math.random() * chars.length)); }
+
+  const idx = users.findIndex((u) => u.email.toLowerCase() === email);
+  users[idx].password = newPass;
+  setLocal(KEYS.users, users);
+
+  // In offline mode, we can't actually send email, but we store it for display
+  try {
+    localStorage.setItem("cyj_reset_password", JSON.stringify({ email, newPassword: newPass, timestamp: Date.now() }));
+  } catch { /* ignore */ }
+
+  return jsonResponse({ success: true, message: "Nueva contraseña generada. En modo offline se mostrará en pantalla." });
+}
+
 // ── Helper functions ──
 function getCatIcon(category: string): string {
   const icons: Record<string, string> = {
@@ -366,9 +437,7 @@ function getCatIcon(category: string): string {
 function getRoleName(roleId: string): string {
   const names: Record<string, string> = {
     super_admin: "Super Administrador", admin: "Administrador",
-    comite: "Comité de Seguridad", guardia: "Guardia de Seguridad",
-    residente_p: "Residente Principal", residente: "Residente",
-    familiar: "Familiar Autorizado", visitante: "Visitante Temporal",
+    residente_guardia: "Residente",
   };
   return names[roleId] || "Residente";
 }
@@ -422,6 +491,10 @@ export function enableOfflineMode(): void {
         return handleGuards(method, body);
       case "profile":
         return handleProfile(body);
+      case "register":
+        return handleRegister(body);
+      case "reset-password":
+        return handleResetPassword(body);
 
       default:
         // For unknown routes, try original fetch (in case server is available)

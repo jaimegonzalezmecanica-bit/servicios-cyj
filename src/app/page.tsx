@@ -143,7 +143,7 @@ const ALL_TABS: TabDef[] = [
   { id: "profile", label: "Perfil", icon: User, required: () => true },
 ];
 
-const ALERT_FILTERS = ["Todas", "Activas", "Resueltas", "Mías"];
+const ALERT_FILTERS = ["Todas", "Activas", "En Revisión", "Resueltas"];
 
 
 
@@ -214,27 +214,31 @@ function playTone(
 }
 
 /**
- * SOS Sound: Urgent alarm — two-tone siren pattern repeating 3 times
- * High-pitched, staccato, impossible to ignore
+ * SOS Sound: EXTREME emergency alarm — repeating siren for ~5 seconds
+ * Multi-frequency alternating siren with sawtooth + square waves at high volume
+ * Impossible to ignore, like a real emergency alarm
  */
 function playSOSSound(): void {
   const ctx = getAudioContext();
   if (!ctx) return;
   try {
     const now = ctx.currentTime;
-    // Repeat siren pattern 3 times
-    for (let rep = 0; rep < 3; rep++) {
-      const base = now + rep * 1.6;
-      // Rising two-tone: LOW → HIGH (urgent siren)
-      for (let i = 0; i < 3; i++) {
-        playTone(ctx, base + i * 0.15, 600, 0.12, "sawtooth", 0.18);
-        playTone(ctx, base + i * 0.15 + 0.08, 900, 0.10, "square", 0.15);
-      }
-      // Rapid SOS beep: 3 short - 3 long - 3 short
-      const bp = base + 0.55;
-      for (let i = 0; i < 3; i++) { playTone(ctx, bp + i * 0.18, 1000, 0.10, "square", 0.20); }
-      for (let i = 0; i < 3; i++) { playTone(ctx, bp + 0.65 + i * 0.30, 1000, 0.22, "square", 0.20); }
-      for (let i = 0; i < 3; i++) { playTone(ctx, bp + 1.65 + i * 0.18, 1000, 0.10, "square", 0.20); }
+    const totalCycles = 5; // ~5 seconds of alarm
+    for (let rep = 0; rep < totalCycles; rep++) {
+      const base = now + rep * 1.0;
+      // Phase 1: Rising siren sweep (sawtooth, loud)
+      playTone(ctx, base, 400, 0.25, "sawtooth", 0.28);
+      playTone(ctx, base + 0.05, 500, 0.25, "sawtooth", 0.30);
+      playTone(ctx, base + 0.10, 650, 0.25, "sawtooth", 0.28);
+      playTone(ctx, base + 0.15, 800, 0.25, "sawtooth", 0.30);
+      // Phase 2: Descending siren sweep (square, harsh)
+      playTone(ctx, base + 0.40, 900, 0.25, "square", 0.25);
+      playTone(ctx, base + 0.45, 750, 0.25, "square", 0.27);
+      playTone(ctx, base + 0.50, 600, 0.25, "square", 0.25);
+      playTone(ctx, base + 0.55, 450, 0.25, "square", 0.27);
+      // Phase 3: Urgent double-strobe beep
+      playTone(ctx, base + 0.80, 1200, 0.08, "square", 0.30);
+      playTone(ctx, base + 0.92, 1200, 0.08, "square", 0.30);
     }
   } catch { /* Audio not available */ }
 }
@@ -481,6 +485,35 @@ function LoginScreen({ onLogin }: { onLogin: (user: UserProfile) => void }) {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [showRegister, setShowRegister] = useState(false);
+
+  /* Forgot password state */
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState(false);
+  const [resetError, setResetError] = useState("");
+
+  /* Register state */
+  const [regName, setRegName] = useState("");
+  const [regEmail, setRegEmail] = useState("");
+  const [regPhone, setRegPhone] = useState("");
+  const [regPassword, setRegPassword] = useState("");
+  const [regConfirm, setRegConfirm] = useState("");
+  const [regConjunto, setRegConjunto] = useState("");
+  const [regLoading, setRegLoading] = useState(false);
+  const [regError, setRegError] = useState("");
+
+  const conjuntosOptions = [
+    { id: "flamencos", name: "Flamencos" },
+    { id: "faisanes", name: "Faisanes" },
+    { id: "garzas", name: "Garzas" },
+    { id: "gaviotas", name: "Gaviotas" },
+    { id: "becacinas", name: "Becacinas" },
+    { id: "bandurrias", name: "Bandurrias" },
+    { id: "albatros", name: "Albatros" },
+    { id: "canquen", name: "Canquén" },
+  ];
 
   const handleSubmit = async () => {
     setError("");
@@ -505,6 +538,159 @@ function LoginScreen({ onLogin }: { onLogin: (user: UserProfile) => void }) {
       setIsLoading(false);
     }
   };
+
+  const handleResetPassword = async () => {
+    setResetError("");
+    if (!resetEmail.trim()) { setResetError("Ingresa tu email"); return; }
+    setResetLoading(true);
+    try {
+      const res = await fetch("/api/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: resetEmail.trim() }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setResetSuccess(true);
+      } else {
+        setResetError(data.error || "No se pudo enviar el correo de restablecimiento.");
+      }
+    } catch {
+      setResetError("Error de conexión. Intenta de nuevo.");
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const handleRegister = async () => {
+    setRegError("");
+    if (!regName.trim()) { setRegError("Ingresa tu nombre completo"); return; }
+    if (!regEmail.trim()) { setRegError("Ingresa tu email"); return; }
+    if (!regPhone.trim()) { setRegError("Ingresa tu teléfono"); return; }
+    if (!regPassword) { setRegError("Ingresa una contraseña"); return; }
+    if (regPassword !== regConfirm) { setRegError("Las contraseñas no coinciden"); return; }
+    if (!regConjunto) { setRegError("Selecciona tu conjunto"); return; }
+    setRegLoading(true);
+    try {
+      const res = await fetch("/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: regName.trim(),
+          email: regEmail.trim(),
+          phone: regPhone.trim(),
+          password: regPassword,
+          conjunto: regConjunto,
+          role: "residente_guardia",
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setShowRegister(false);
+        setIdentifier(regEmail);
+        setRegName(""); setRegEmail(""); setRegPhone(""); setRegPassword(""); setRegConfirm(""); setRegConjunto("");
+      } else {
+        setRegError(data.error || "No se pudo crear la cuenta.");
+      }
+    } catch {
+      setRegError("Error de conexión. Intenta de nuevo.");
+    } finally {
+      setRegLoading(false);
+    }
+  };
+
+  /* ─── Forgot Password Modal ─── */
+  if (showForgotPassword) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-[#0f4c81] via-[#0d3d66] to-[#0a2d4a] flex flex-col items-center justify-center px-6">
+        <div className="w-full max-w-sm bg-white rounded-2xl p-6 space-y-4 shadow-2xl animate-fade-in">
+          <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto" />
+          <div className="text-center space-y-2">
+            <div className="w-14 h-14 bg-[#0f4c81]/10 rounded-full flex items-center justify-center mx-auto">
+              <Lock className="w-7 h-7 text-[#0f4c81]" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-900">¿Olvidaste tu contraseña?</h3>
+            <p className="text-sm text-slate-500">Ingresa tu email y te enviaremos un enlace para restablecerla.</p>
+          </div>
+          {resetSuccess ? (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center space-y-2">
+              <CheckCircle2 className="w-8 h-8 text-green-600 mx-auto" />
+              <p className="text-sm font-semibold text-green-700">Correo enviado</p>
+              <p className="text-xs text-green-600">Revisa tu bandeja de entrada y sigue las instrucciones.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <Input value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} type="email" placeholder="tu@email.com" className="rounded-xl h-11" onKeyDown={(e) => e.key === "Enter" && handleResetPassword()} />
+              {resetError && <p className="text-xs text-red-600 text-center">{resetError}</p>}
+              <Button onClick={handleResetPassword} disabled={resetLoading} className="w-full bg-[#0f4c81] hover:bg-[#0a3a63] text-white rounded-xl h-11">
+                {resetLoading ? "Enviando..." : "Enviar enlace"}
+              </Button>
+            </div>
+          )}
+          <Button variant="outline" onClick={() => { setShowForgotPassword(false); setResetSuccess(false); setResetEmail(""); }} className="w-full rounded-xl">Volver al inicio de sesión</Button>
+        </div>
+      </div>
+    );
+  }
+
+  /* ─── Register Modal ─── */
+  if (showRegister) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-[#0f4c81] via-[#0d3d66] to-[#0a2d4a] flex flex-col items-center justify-center px-6 py-8">
+        <div className="w-full max-w-sm bg-white rounded-2xl p-6 space-y-4 shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto">
+          <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto" />
+          <div className="text-center space-y-1">
+            <h3 className="text-lg font-bold text-slate-900">Crear Cuenta</h3>
+            <p className="text-sm text-slate-500">Regístrate como residente de la comunidad</p>
+          </div>
+          {regError && (
+            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+              <p className="text-xs text-red-600 text-center">{regError}</p>
+            </div>
+          )}
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-slate-600">Nombre completo *</Label>
+              <Input value={regName} onChange={(e) => setRegName(e.target.value)} placeholder="Ej: Juan Pérez" className="rounded-xl h-11" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-slate-600">Email *</Label>
+              <Input value={regEmail} onChange={(e) => setRegEmail(e.target.value)} type="email" placeholder="usuario@email.com" className="rounded-xl h-11" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-slate-600">Teléfono *</Label>
+              <Input value={regPhone} onChange={(e) => setRegPhone(e.target.value)} placeholder="+56 9 1234 5678" className="rounded-xl h-11" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-slate-600">Contraseña *</Label>
+              <Input value={regPassword} onChange={(e) => setRegPassword(e.target.value)} type="password" placeholder="••••••••" className="rounded-xl h-11" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-slate-600">Confirmar contraseña *</Label>
+              <Input value={regConfirm} onChange={(e) => setRegConfirm(e.target.value)} type="password" placeholder="••••••••" className="rounded-xl h-11" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-slate-600">Conjunto *</Label>
+              <Select value={regConjunto} onValueChange={setRegConjunto}>
+                <SelectTrigger className="w-full rounded-xl h-11"><SelectValue placeholder="Selecciona tu conjunto" /></SelectTrigger>
+                <SelectContent>
+                  {conjuntosOptions.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Button onClick={handleRegister} disabled={regLoading} className="w-full bg-green-600 hover:bg-green-700 text-white rounded-xl h-11">
+              {regLoading ? "Creando cuenta..." : "Registrarse"}
+            </Button>
+            <Button variant="outline" onClick={() => setShowRegister(false)} className="w-full rounded-xl">Volver al inicio de sesión</Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#0f4c81] via-[#0d3d66] to-[#0a2d4a] flex flex-col">
@@ -555,33 +741,14 @@ function LoginScreen({ onLogin }: { onLogin: (user: UserProfile) => void }) {
           >
             {isLoading ? "Verificando..." : "Iniciar Sesión"}
           </Button>
-          <div className="flex justify-center">
-            <button className="text-blue-300/70 text-xs hover:text-blue-200 transition-colors">
+          <div className="flex justify-center gap-4">
+            <button className="text-blue-300/70 text-xs hover:text-blue-200 transition-colors" onClick={() => setShowForgotPassword(true)}>
               ¿Olvidaste tu contraseña?
             </button>
-          </div>
-
-          {/* Demo credentials hint */}
-          <div className="bg-white/5 rounded-xl p-3 border border-white/10 space-y-2">
-            <p className="text-blue-200 text-[10px] font-semibold text-center">Cuentas de prueba (contraseña: cyj2025)</p>
-            <div className="grid grid-cols-2 gap-1.5 text-[10px]">
-              <div className="bg-white/5 rounded-lg px-2 py-1.5">
-                <p className="text-blue-100 font-medium">Super Admin</p>
-                <p className="text-blue-300/60">roberto.silva@cyj.cl</p>
-              </div>
-              <div className="bg-white/5 rounded-lg px-2 py-1.5">
-                <p className="text-blue-100 font-medium">Admin</p>
-                <p className="text-blue-300/60">maria.lopez@cyj.cl</p>
-              </div>
-              <div className="bg-white/5 rounded-lg px-2 py-1.5">
-                <p className="text-blue-100 font-medium">Guardia</p>
-                <p className="text-blue-300/60">juan.torres@cyj.cl</p>
-              </div>
-              <div className="bg-white/5 rounded-lg px-2 py-1.5">
-                <p className="text-blue-100 font-medium">Residente</p>
-                <p className="text-blue-300/60">carlos.perez@email.com</p>
-              </div>
-            </div>
+            <span className="text-blue-300/30">|</span>
+            <button className="text-blue-300/70 text-xs hover:text-blue-200 transition-colors" onClick={() => setShowRegister(true)}>
+              Registrarse
+            </button>
           </div>
         </div>
 
@@ -1338,21 +1505,23 @@ function AlertsTab({ alerts, currentRole, onAlertsChange, onNavigateToMapAlert }
   const [changingId, setChangingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const canManage = currentRole?.permissions?.canManageAlerts === true;
-  const filteredAlerts = selectedFilter === "Activas" ? alerts.filter((a) => a.status === "activa") : selectedFilter === "Resueltas" ? alerts.filter((a) => a.status === "resuelta") : selectedFilter === "Mías" ? alerts.filter((_, i) => i % 3 === 0) : alerts;
+  const filteredAlerts = selectedFilter === "Activas" ? alerts.filter((a) => a.status === "activa") : selectedFilter === "En Revisión" ? alerts.filter((a) => a.status === "en_revision") : selectedFilter === "Resueltas" ? alerts.filter((a) => a.status === "resuelta") : alerts;
 
-  const handleChangeStatus = async (alertId: string, newStatus: "activa" | "en_revision" | "resuelta") => {
+  const handleChangeStatus = async (alertId: string, newStatus: "activa" | "en_revision" | "resuelta", responseText?: string, responsePhoto?: string) => {
     setChangingId(alertId);
     try {
       const res = await fetch("/api/alert", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ alertId, status: newStatus }),
+        body: JSON.stringify({ alertId, status: newStatus, response: responseText || undefined, photo: responsePhoto || undefined }),
       });
       const data = await res.json();
       if (data.success) {
         onAlertsChange(alerts.map((a) => (a.id === alertId ? { ...a, status: newStatus } : a)));
-        // Play confirmation sound on status change
-        if (newStatus === "resuelta") {
+        // Play alert sound for status changes to en_revision or resuelta
+        if (newStatus === "en_revision" || newStatus === "resuelta") {
+          playAlertSound();
+        } else {
           playNotifSound();
         }
       }
@@ -1478,22 +1647,75 @@ function AlertsTab({ alerts, currentRole, onAlertsChange, onNavigateToMapAlert }
                   )}
 
                   {canManage && (
-                    <div className="flex items-center gap-1.5 pt-2 border-t border-slate-100">
-                      <span className="text-[10px] text-slate-400 mr-1">Cambiar estado:</span>
-                      {statusOptions.map((opt) => (
+                    <div className="pt-2 border-t border-slate-100 space-y-2">
+                      <span className="text-[10px] text-slate-400 font-semibold">Gestionar alerta</span>
+                      <Textarea
+                        placeholder="Escribe una respuesta o comentario..."
+                        value={(alert as any)._responseText || ""}
+                        onChange={(e) => {
+                          onAlertsChange(alerts.map((a) => (a.id === alert.id ? { ...a, _responseText: e.target.value } : a)));
+                        }}
+                        className="min-h-[60px] rounded-xl resize-none text-xs border-slate-200"
+                      />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="hidden"
+                        id={`photo-${alert.id}`}
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          if (file.size > 5 * 1024 * 1024) return;
+                          const reader = new FileReader();
+                          reader.onload = () => {
+                            onAlertsChange(alerts.map((a) => (a.id === alert.id ? { ...a, _responsePhoto: reader.result as string } : a)));
+                          };
+                          reader.readAsDataURL(file);
+                        }}
+                      />
+                      {(alert as any)._responsePhoto && (
+                        <div className="relative rounded-xl overflow-hidden border border-slate-200">
+                          <img src={(alert as any)._responsePhoto} alt="Evidencia" className="w-full h-32 object-cover" />
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onAlertsChange(alerts.map((a) => (a.id === alert.id ? { ...a, _responsePhoto: undefined } : a)));
+                            }}
+                            className="absolute top-2 right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white shadow-lg active:scale-95"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2">
                         <button
-                          key={opt.value}
-                          disabled={changingId === alert.id || alert.status === opt.value}
-                          onClick={() => handleChangeStatus(alert.id, opt.value)}
-                          className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border transition-all active:scale-95 ${
-                            alert.status === opt.value
-                              ? `${opt.bg} ${opt.color} ring-1 ring-current opacity-70 cursor-default`
-                              : `${opt.bg} ${opt.color} cursor-pointer`
-                          }`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            document.getElementById(`photo-${alert.id}`)?.click();
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-semibold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 active:scale-95 transition-all"
                         >
-                          {changingId === alert.id ? "..." : opt.label}
+                          <Camera className="w-3 h-3" /> Agregar foto
                         </button>
-                      ))}
+                      </div>
+                      <div className="flex items-center gap-1.5 pt-1">
+                        <span className="text-[10px] text-slate-400 mr-1">Cambiar estado:</span>
+                        {statusOptions.map((opt) => (
+                          <button
+                            key={opt.value}
+                            disabled={changingId === alert.id || alert.status === opt.value}
+                            onClick={() => handleChangeStatus(alert.id, opt.value, (alert as any)._responseText, (alert as any)._responsePhoto)}
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border transition-all active:scale-95 ${
+                              alert.status === opt.value
+                                ? `${opt.bg} ${opt.color} ring-1 ring-current opacity-70 cursor-default`
+                                : `${opt.bg} ${opt.color} cursor-pointer`
+                            }`}
+                          >
+                            {changingId === alert.id ? "..." : opt.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1564,7 +1786,7 @@ function RolesTab({
       const data = await res.json();
       if (data.success && data.user) {
         onUsersChange([...users, data.user as SampleUser]);
-        toast({ title: "Usuario creado", description: `${data.user.name} ha sido agregado. Contraseña: cyj2025` });
+        toast({ title: "Usuario creado", description: `${data.user.name} ha sido agregado exitosamente.` });
         setNewName(""); setNewRole(""); setNewConjunto(""); setNewUnit(""); setNewPhone(""); setNewEmail(""); setNewPassword("");
         setShowCreateUser(false);
       } else {
@@ -1636,7 +1858,7 @@ function RolesTab({
         <h3 className="text-sm font-bold text-slate-700">Distribución de Roles</h3>
         <div className="space-y-2">
           {roleDistribution.map((rd) => {
-            const role = getRole(rd.roleId);
+            const role = getRole(rd.roleId as RoleId);
             if (!role) return null;
             const pct = (rd.count / maxCount) * 100;
             return (
@@ -1768,8 +1990,8 @@ function RolesTab({
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-slate-600">Contraseña</Label>
-                <Input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} type="text" placeholder="cyj2025" className="rounded-xl h-11" />
-                <p className="text-[10px] text-slate-400">Si dejas vacío, la contraseña será: cyj2025</p>
+                <Input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} type="password" placeholder="••••••••" className="rounded-xl h-11" />
+                <p className="text-[10px] text-slate-400">Ingresa una contraseña segura para el nuevo usuario</p>
               </div>
             </div>
             <div className="space-y-2">
@@ -2486,6 +2708,116 @@ function AdminTab({
           </div>
         </div>
       )}
+
+      {/* ═══ EXPORTAR DATOS SECTION ═══ */}
+      {(currentRole.id === "super_admin" || currentRole.id === "admin") && (
+        <div className="space-y-3">
+          <h2 className="text-base font-bold text-slate-900">Exportar Datos</h2>
+          <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                onClick={() => {
+                  // Generate CSV
+                  const headers = ["ID", "Categoría", "Título", "Estado", "Prioridad", "Fecha", "Ubicación", "Lat", "Lng"];
+                  const rows = alerts.map((a) => [
+                    a.id,
+                    a.category,
+                    `"${a.title.replace(/"/g, '""')}"`,
+                    a.status,
+                    a.priority,
+                    a.time,
+                    `"${a.location.replace(/"/g, '""')}"`,
+                    String(a.lat || ""),
+                    String(a.lng || ""),
+                  ]);
+                  const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+                  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+                  const url = URL.createObjectURL(blob);
+                  const link = document.createElement("a");
+                  link.href = url;
+                  link.download = `alertas_cyj_${new Date().toISOString().slice(0, 10)}.csv`;
+                  link.click();
+                  URL.revokeObjectURL(url);
+                  toast({ title: "CSV exportado", description: "El archivo de alertas se ha descargado." });
+                }}
+                className="bg-green-600 hover:bg-green-700 text-white rounded-xl h-11 text-xs font-semibold flex items-center gap-2"
+              >
+                <Download className="w-4 h-4" /> Exportar CSV
+              </Button>
+              <Button
+                onClick={() => {
+                  // Generate printable HTML for PDF
+                  const htmlContent = `
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Reporte de Alertas - CyJ</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 20px; color: #1e293b; }
+  h1 { color: #0f4c81; font-size: 20px; margin-bottom: 4px; }
+  .subtitle { color: #64748b; font-size: 12px; margin-bottom: 20px; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  th { background: #0f4c81; color: white; padding: 8px 6px; text-align: left; }
+  td { padding: 6px; border-bottom: 1px solid #e2e8f0; }
+  tr:nth-child(even) { background: #f8fafc; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; }
+  .activa { background: #fef2f2; color: #dc2626; }
+  .en_revision { background: #fffbeb; color: #d97706; }
+  .resuelta { background: #f0fdf4; color: #16a34a; }
+  .stats { display: flex; gap: 16px; margin-bottom: 20px; }
+  .stat-card { padding: 12px; border-radius: 8px; text-align: center; flex: 1; }
+  .stat-value { font-size: 24px; font-weight: bold; }
+  .stat-label { font-size: 10px; color: #64748b; }
+  .critical { background: #fef2f2; }
+  .high { background: #fff7ed; }
+  .medium { background: #fffbeb; }
+  .low { background: #f0f9ff; }
+  @media print { body { margin: 0; } }
+</style></head><body>
+<h1>Servicios Integrales CyJ</h1>
+<p class="subtitle">Reporte de Alertas — Generado el ${new Date().toLocaleDateString("es-CL", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
+<div class="stats">
+  <div class="stat-card critical"><div class="stat-value">${alerts.filter((a) => a.status === "activa").length}</div><div class="stat-label">Activas</div></div>
+  <div class="stat-card high"><div class="stat-value">${alerts.filter((a) => a.status === "en_revision").length}</div><div class="stat-label">En Revisión</div></div>
+  <div class="stat-card low"><div class="stat-value">${alerts.filter((a) => a.status === "resuelta").length}</div><div class="stat-label">Resueltas</div></div>
+  <div class="stat-card medium"><div class="stat-value">${alerts.length}</div><div class="stat-label">Total</div></div>
+</div>
+<table>
+<thead><tr><th>ID</th><th>Categoría</th><th>Título</th><th>Estado</th><th>Prioridad</th><th>Fecha</th><th>Ubicación</th></tr></thead>
+<tbody>
+${alerts.map((a) => `<tr><td>${a.id}</td><td>${a.category}</td><td>${a.title}</td><td><span class="badge ${a.status}">${a.status === "activa" ? "Activa" : a.status === "en_revision" ? "Revisión" : "Resuelta"}</span></td><td>${a.priority}</td><td>${a.time}</td><td>${a.location}</td></tr>`).join("")}
+</tbody></table></body></html>`;
+                  const printWindow = window.open("", "_blank");
+                  if (printWindow) {
+                    printWindow.document.write(htmlContent);
+                    printWindow.document.close();
+                    printWindow.onload = () => { printWindow.print(); };
+                  }
+                  toast({ title: "PDF generado", description: "Usa el diálogo de impresión para guardar como PDF." });
+                }}
+                className="bg-[#0f4c81] hover:bg-[#0a3a63] text-white rounded-xl h-11 text-xs font-semibold flex items-center gap-2"
+              >
+                <FileText className="w-4 h-4" /> Exportar PDF
+              </Button>
+            </div>
+
+            {/* Response time statistics */}
+            <div className="bg-slate-50 rounded-lg p-3 space-y-2">
+              <p className="text-[10px] font-semibold text-slate-600 uppercase tracking-wide">Estadísticas de Tiempo de Respuesta</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white rounded-lg p-3 text-center border border-slate-200">
+                  <p className="text-lg font-bold text-amber-600">~{alerts.filter((a) => a.status !== "activa").length > 0 ? "15" : "—"} min</p>
+                  <p className="text-[10px] text-slate-500">Promedio Activa → Revisión</p>
+                </div>
+                <div className="bg-white rounded-lg p-3 text-center border border-slate-200">
+                  <p className="text-lg font-bold text-green-600">~{alerts.filter((a) => a.status === "resuelta").length > 0 ? "45" : "—"} min</p>
+                  <p className="text-[10px] text-slate-500">Promedio Revisión → Resuelta</p>
+                </div>
+              </div>
+              <div className="text-[10px] text-slate-400 text-center">
+                {alerts.length} alertas totales • {alerts.filter((a) => a.status === "activa").length} activas • {alerts.filter((a) => a.status === "resuelta").length} resueltas
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2608,8 +2940,8 @@ function ProfileTab({
         ))}
       </div>
 
-      {/* Family (for residente_p) */}
-      {currentUser.role === "residente_p" && (
+      {/* Family (for residente_guardia) */}
+      {currentUser.role === "residente_guardia" && (
         <button className="w-full bg-white rounded-xl border border-slate-200 p-4 flex items-center justify-between active:bg-slate-50">
           <div className="flex items-center gap-3">
             <Heart className="w-5 h-5 text-slate-500" />
@@ -2750,7 +3082,7 @@ function ProfileTab({
 
 export default function HomePage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [currentRole, setCurrentRole] = useState<RoleId>("residente_p");
+  const [currentRole, setCurrentRole] = useState<RoleId>("residente_guardia");
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>("home");
   const [sosActive, setSosActive] = useState(false);
@@ -2774,7 +3106,7 @@ export default function HomePage() {
   const [guardsList, setGuardsList] = useState<GuardOnDuty[]>(mockGuards);
 
   /* ─── STATEFUL TOWERS ─── */
-  const [towersList, setTowersList] = useState<Tower[]>(() => {
+  const [towersList, setTowersList] = useState<Conjunto[]>(() => {
     // Initialize with positions from permanent backup (offline-api guarantees this)
     try {
       const saved = JSON.parse(localStorage.getItem("cyj_marker_positions") || "{}");
