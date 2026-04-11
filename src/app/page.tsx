@@ -65,7 +65,6 @@ import {
   ROLES,
   hasPermission,
   getRole,
-  demoAccounts,
   sampleUsers,
   roleDistribution,
   towers,
@@ -353,12 +352,33 @@ const INSTALL_DISMISSED_KEY = "cyj-install-dismissed";
    ═══════════════════════════════════════════════════════════ */
 
 function LoginScreen({ onLogin }: { onLogin: (user: UserProfile) => void }) {
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
-  const [selectedDemo, setSelectedDemo] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleDemoLogin = (account: UserProfile) => {
-    onLogin(account);
+  const handleSubmit = async () => {
+    setError("");
+    if (!identifier.trim()) { setError("Ingresa tu email o teléfono"); return; }
+    if (!password.trim()) { setError("Ingresa tu contraseña"); return; }
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier: identifier.trim(), password }),
+      });
+      const data = await res.json();
+      if (data.success && data.user) {
+        onLogin(data.user);
+      } else {
+        setError(data.error || "Credenciales inválidas");
+      }
+    } catch {
+      setError("Error de conexión. Intenta de nuevo.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -377,10 +397,11 @@ function LoginScreen({ onLogin }: { onLogin: (user: UserProfile) => void }) {
           <div className="space-y-1.5">
             <Label className="text-blue-200 text-xs font-medium">Email o Teléfono</Label>
             <Input
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               placeholder="usuario@email.com"
               className="bg-white/10 border-white/20 text-white placeholder:text-blue-300/50 rounded-xl h-12"
+              onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
             />
           </div>
           <div className="space-y-1.5">
@@ -392,66 +413,58 @@ function LoginScreen({ onLogin }: { onLogin: (user: UserProfile) => void }) {
                 type="password"
                 placeholder="••••••••"
                 className="bg-white/10 border-white/20 text-white placeholder:text-blue-300/50 rounded-xl h-12 pr-10"
+                onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
               />
               <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-300/50" />
             </div>
           </div>
+          {error && (
+            <div className="bg-red-500/20 border border-red-400/30 rounded-xl px-4 py-3">
+              <p className="text-red-200 text-xs font-medium text-center">{error}</p>
+            </div>
+          )}
           <Button
-            onClick={() => handleDemoLogin(demoAccounts[selectedDemo])}
-            className="w-full bg-green-600 hover:bg-green-700 text-white py-6 text-base font-semibold rounded-xl h-12 shadow-lg shadow-green-600/30"
+            onClick={handleSubmit}
+            disabled={isLoading}
+            className="w-full bg-green-600 hover:bg-green-700 text-white py-6 text-base font-semibold rounded-xl h-12 shadow-lg shadow-green-600/30 disabled:opacity-50"
           >
-            Iniciar Sesión
+            {isLoading ? "Verificando..." : "Iniciar Sesión"}
           </Button>
+          <div className="flex justify-center">
+            <button className="text-blue-300/70 text-xs hover:text-blue-200 transition-colors">
+              ¿Olvidaste tu contraseña?
+            </button>
+          </div>
         </div>
 
-        {/* Demo accounts */}
-        <div className="w-full max-w-sm mt-8">
-          <p className="text-blue-300 text-xs font-semibold text-center mb-3">Cuentas de Demostración</p>
-          <div className="space-y-2">
-            {demoAccounts.map((account, idx) => {
-              const roleData = getRole(account.role);
-              return (
-                <button
-                  key={account.role}
-                  onClick={() => {
-                    setSelectedDemo(idx);
-                    handleDemoLogin(account);
-                  }}
-                  className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all active:scale-[0.98] ${
-                    selectedDemo === idx
-                      ? "bg-white/20 border-white/40"
-                      : "bg-white/5 border-white/10 hover:bg-white/10"
-                  }`}
-                >
-                  <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-white font-bold text-sm"
-                    style={{ backgroundColor: roleData?.color || "#64748b" }}
-                  >
-                    {account.avatarInitial}
-                  </div>
-                  <div className="flex-1 text-left min-w-0">
-                    <p className="text-sm font-semibold text-white truncate">{account.name}</p>
-                    <p className="text-[11px] text-blue-200 truncate">{account.roleName}</p>
-                  </div>
-                  <div
-                    className="px-2 py-0.5 rounded-full text-[9px] font-bold border"
-                    style={{
-                      backgroundColor: (roleData?.color || "#64748b") + "20",
-                      color: roleData?.color || "#64748b",
-                      borderColor: (roleData?.color || "#64748b") + "40",
-                    }}
-                  >
-                    {account.roleName}
-                  </div>
-                </button>
-              );
-            })}
+        {/* Community info */}
+        <div className="w-full max-w-sm mt-10">
+          <div className="bg-white/5 rounded-2xl p-5 border border-white/10 space-y-4">
+            <div className="flex items-center justify-center gap-2">
+              <Shield className="w-4 h-4 text-green-400" />
+              <span className="text-white text-xs font-semibold">Comunidad Segura</span>
+            </div>
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div>
+                <p className="text-white font-bold text-lg">722</p>
+                <p className="text-blue-300/60 text-[10px]">Miembros</p>
+              </div>
+              <div>
+                <p className="text-white font-bold text-lg">6</p>
+                <p className="text-blue-300/60 text-[10px]">Torres</p>
+              </div>
+              <div>
+                <p className="text-white font-bold text-lg">24/7</p>
+                <p className="text-blue-300/60 text-[10px]">Vigilancia</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Footer */}
-      <div className="px-6 pb-8 text-center">
+      <div className="px-6 pb-8 text-center space-y-2">
+        <p className="text-blue-300/50 text-[10px]">Al iniciar sesión aceptas los términos de uso de la plataforma</p>
         <p className="text-blue-300/40 text-[10px]">Servicios Integrales CyJ v2.1.0</p>
       </div>
     </div>
@@ -1499,29 +1512,6 @@ function ProfileTab({
         </button>
       </div>
 
-      {/* Switch Role (Demo) */}
-      <button onClick={() => setShowRoleSelector(!showRoleSelector)} className="w-full bg-[#0f4c81]/5 border border-[#0f4c81]/20 text-[#0f4c81] rounded-xl p-4 flex items-center justify-center gap-2 active:bg-[#0f4c81]/10 transition-colors">
-        <Crown className="w-5 h-5" /><span className="text-sm font-semibold">Cambiar Rol (Demo)</span>
-      </button>
-
-      {showRoleSelector && (
-        <div className="space-y-2 animate-fade-in">
-          <p className="text-xs font-semibold text-slate-500 text-center">Selecciona una cuenta de demostración</p>
-          {demoAccounts.map((account) => {
-            const role = getRole(account.role);
-            return (
-              <button key={account.role} onClick={() => { onSwitchRole(account); setShowRoleSelector(false); toast({ title: "Rol cambiado", description: `Ahora eres ${account.roleName}` }); }} className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-white active:bg-slate-50 transition-colors">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm" style={{ backgroundColor: role?.color || "#64748b" }}>{account.avatarInitial}</div>
-                <div className="flex-1 text-left">
-                  <p className="text-sm font-semibold text-slate-900">{account.name}</p>
-                  <p className="text-[11px] text-slate-400">{account.roleName}</p>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
       {/* Save */}
       <Button onClick={handleSave} className="w-full bg-[#0f4c81] hover:bg-[#0a3a63] text-white py-5 rounded-xl">Guardar Cambios</Button>
 
@@ -1559,7 +1549,7 @@ function ProfileTab({
 export default function HomePage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentRole, setCurrentRole] = useState<RoleId>("residente_p");
-  const [currentUser, setCurrentUser] = useState<UserProfile>(demoAccounts[0]);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>("home");
   const [sosActive, setSosActive] = useState(false);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
