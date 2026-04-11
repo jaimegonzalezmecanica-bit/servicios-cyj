@@ -202,3 +202,22 @@ Stage Summary:
 - Map shows real interactive Leaflet map with towers, incidents, and perimeter
 - All text remains in Spanish
 - ESLint passes with 0 errors
+
+---
+Task ID: fix-4-bugs
+Agent: main
+Task: Fix 4 broken features: crear anuncios, asignar turnos, agregar foto, ubicacion
+
+Work Log:
+- Root cause: HomeTab referenced `announcements` (undefined variable, imported as `mockAnnouncements`), causing runtime crash on default Home tab
+- Fixed HomeTab: added `announcements` prop and null guard
+- Fixed ReportTab: photo now included in API POST body
+- Updated `/api/alert/route.ts`: accepts and stores photo field
+- Updated Alert interface: added `photo?: string | null`
+- Updated all 10 mock alerts with real Condominio Laguna Norte coordinates
+- Updated all 8 incident markers with real coordinates
+- Report location now shows "Av. La Montaña Norte 3650, Condominio Laguna Norte, Lampa, Chile"
+- All APIs verified: login, announcements POST, guards POST, alert POST with photo
+
+Stage Summary:
+- All 4 issues resolved: announcements, shifts, photos, location

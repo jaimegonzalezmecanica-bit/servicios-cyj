@@ -624,12 +624,14 @@ function HomeTab({
   currentUser,
   currentRole,
   alerts,
+  announcements,
   onNavigate,
   onSOSActivate,
 }: {
   currentUser: UserProfile;
   currentRole: Role;
   alerts: Alert[];
+  announcements: Announcement[];
   onNavigate: (tab: TabId) => void;
   onSOSActivate: () => void;
 }) {
@@ -760,6 +762,7 @@ function HomeTab({
       </div>
 
       {/* Announcement Banner */}
+      {announcements.length > 0 && (
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-3">
         <Megaphone className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
@@ -767,6 +770,7 @@ function HomeTab({
           <p className="text-[11px] text-amber-600 mt-0.5 line-clamp-2">{announcements[0].description}</p>
         </div>
       </div>
+      )}
 
       {/* Recent Alerts */}
       <div className="space-y-3">
@@ -852,7 +856,8 @@ function ReportTab({
     if (!description.trim()) { toast({ title: "Agrega una descripción", description: "Describe lo que sucedió.", variant: "destructive" }); return; }
     setIsSubmitting(true);
     try {
-      const res = await fetch("/api/alert", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category: selectedCategory, description, location: useLocation ? "Ubicación actual" : "No especificada", isAnonymous, priority }) });
+      const locationText = useLocation ? "Av. La Montaña Norte 3650, Condominio Laguna Norte, Lampa, Chile" : "No especificada";
+      const res = await fetch("/api/alert", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category: selectedCategory, description, location: locationText, isAnonymous, priority, photo: photoBase64 || undefined }) });
       const data = await res.json();
       if (data.success && data.alert) {
         onReportSubmitted(data.alert);
@@ -903,6 +908,9 @@ function ReportTab({
           <div className="flex items-center gap-2"><MapPin className="w-5 h-5 text-[#0f4c81]" /><span className="text-sm font-semibold text-slate-700">Ubicación actual</span></div>
           <Switch checked={useLocation} onCheckedChange={setUseLocation} />
         </div>
+        {useLocation && (
+          <p className="text-[11px] text-slate-400 leading-relaxed">Av. La Montaña Norte 3650, Condominio Laguna Norte, Valle Grande, Lampa, Chile</p>
+        )}
       </div>
       <div className="space-y-2">
         <Label className="text-sm font-semibold text-slate-700">Evidencia fotográfica</Label>
@@ -2175,7 +2183,7 @@ export default function HomePage() {
   const renderTabContent = () => {
     if (!role || !currentUser) return null;
     switch (activeTab) {
-      case "home": return <HomeTab currentUser={currentUser} currentRole={role} alerts={alerts} onNavigate={handleNavigate} onSOSActivate={() => setSosActive(true)} />;
+      case "home": return <HomeTab currentUser={currentUser} currentRole={role} alerts={alerts} announcements={announcementsList} onNavigate={handleNavigate} onSOSActivate={() => setSosActive(true)} />;
       case "report": return <ReportTab onNavigate={handleNavigate} onReportSubmitted={handleReportSubmitted} />;
       case "map": return <MapTab />;
       case "alerts": return <AlertsTab alerts={alerts} />;
