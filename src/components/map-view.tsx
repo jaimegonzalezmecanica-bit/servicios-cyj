@@ -10,7 +10,7 @@ import type { IncidentMarker } from "@/lib/mock-data";
   Av. La Montaña Norte 3650, Valle Grande, Lampa, Chile
   Exact coordinates from maptons.com
 */
-const MAP_CENTER: L.LatLngExpression = [-33.3276, -70.7630];
+const MAP_CENTER: L.LatLngExpression = [-33.3273, -70.7628];
 const MAP_ZOOM = 17;
 
 /* Incident positions spread around the condominium grounds */
@@ -70,16 +70,16 @@ export default function MapView({ incidents, filter, onSelectMarker }: MapViewPr
       maxZoom: 19,
     }).addTo(map);
 
-    /* Condominium markers (8 micro-condominios) */
+    /* Condominium markers (8 micro-condominios) - positions from real site plan */
     const condominios = [
-      { name: "Flamencos",  pos: [-33.3262, -70.7606] as L.LatLngExpression, type: "casas" },
-      { name: "Faisanes",   pos: [-33.3265, -70.7616] as L.LatLngExpression, type: "casas" },
-      { name: "Garzas",     pos: [-33.3268, -70.7626] as L.LatLngExpression, type: "casas" },
-      { name: "Gaviotas",   pos: [-33.3272, -70.7632] as L.LatLngExpression, type: "casas" },
-      { name: "Becacinas",  pos: [-33.3276, -70.7638] as L.LatLngExpression, type: "casas" },
-      { name: "Bandurrias", pos: [-33.3280, -70.7642] as L.LatLngExpression, type: "casas" },
-      { name: "Albatros",   pos: [-33.3284, -70.7646] as L.LatLngExpression, type: "casas" },
-      { name: "Canquén",    pos: [-33.3288, -70.7650] as L.LatLngExpression, type: "deptos" },
+      { name: "Faisanes",   pos: [-33.3258, -70.7618] as L.LatLngExpression, type: "casas" },
+      { name: "Garzas",     pos: [-33.3262, -70.7628] as L.LatLngExpression, type: "casas" },
+      { name: "Flamencos",  pos: [-33.3264, -70.7642] as L.LatLngExpression, type: "casas" },
+      { name: "Gaviotas",   pos: [-33.3274, -70.7638] as L.LatLngExpression, type: "casas" },
+      { name: "Becacinas",  pos: [-33.3278, -70.7625] as L.LatLngExpression, type: "casas" },
+      { name: "Bandurrias", pos: [-33.3285, -70.7635] as L.LatLngExpression, type: "casas" },
+      { name: "Albatros",   pos: [-33.3288, -70.7618] as L.LatLngExpression, type: "casas" },
+      { name: "Canquén",    pos: [-33.3294, -70.7630] as L.LatLngExpression, type: "deptos" },
     ];
 
     condominios.forEach(({ name, pos, type }) => {
@@ -99,10 +99,10 @@ export default function MapView({ incidents, filter, onSelectMarker }: MapViewPr
 
     /* Condominium perimeter (approximate geofence for Laguna Norte) */
     const perimeter = [
-      [-33.3245, -70.7590],
-      [-33.3245, -70.7660],
-      [-33.3305, -70.7660],
-      [-33.3305, -70.7590],
+      [-33.3250, -70.7610],
+      [-33.3250, -70.7650],
+      [-33.3298, -70.7650],
+      [-33.3298, -70.7610],
     ];
     L.polygon(perimeter, {
       color: "#0f4c81",
@@ -112,23 +112,24 @@ export default function MapView({ incidents, filter, onSelectMarker }: MapViewPr
       fillOpacity: 0.05,
     }).addTo(map);
 
-    /* Community label */
-    L.marker(MAP_CENTER, {
+    /* Community label - Laguna Norte (café color as shown on map) */
+    L.marker([-33.3276, -70.7633], {
       icon: L.divIcon({
         className: "",
         html: `<div style="
-          background: rgba(15,76,129,0.9);
+          background: rgba(139,90,43,0.92);
           color: white;
-          padding: 4px 10px;
+          padding: 5px 12px;
           border-radius: 6px;
-          font-size: 11px;
-          font-weight: 600;
+          font-size: 12px;
+          font-weight: 700;
           white-space: nowrap;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+          box-shadow: 0 2px 8px rgba(0,0,0,0.25);
           border: 1px solid rgba(255,255,255,0.3);
-        ">Condominio Laguna Norte</div>`,
-        iconSize: [180, 24],
-        iconAnchor: [90, 12],
+          letter-spacing: 0.5px;
+        ">Laguna Norte</div>`,
+        iconSize: [140, 26],
+        iconAnchor: [70, 13],
       }),
     }).addTo(map);
 
@@ -151,7 +152,7 @@ export default function MapView({ incidents, filter, onSelectMarker }: MapViewPr
       iconAnchor: [30, 10],
     });
 
-    L.marker([-33.3300, -70.7625], { icon: entranceIcon })
+    L.marker([-33.3298, -70.7630], { icon: entranceIcon })
       .addTo(map)
       .bindPopup("<strong>Acceso Principal</strong><br>Av. La Montaña Norte 3650");
 

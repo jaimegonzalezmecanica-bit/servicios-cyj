@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Claro, aquí tienes un análisis detallado del mapa del condominio \"Laguna Norte\" en Chile:\n\n### 1) Nombres de los micro-condominios visibles:\nLos micro-condominios que se pueden identificar en el mapa son:\n*   Flamencos\n*   Faisanes\n*   Becacinas\n*   Bandurrias\n*   Albatros\n\n**Nota:** Los nombres \"Garzas\", \"Gaviotas\" y \"Canquén\" no son visibles en el mapa proporcionado.\n\n### 2) Posición relativa de cada uno:\n*   **Flamencos:** Se encuentra en la parte inferior izquierda del mapa, al oeste de la laguna.\n*   **Faisanes:** Está en la parte superior derecha del mapa, al norte de Becacinas.\n*   **Becacinas:** Se ubica en la parte central derecha del mapa, al sur de Faisanes y al norte de Bandurrias.\n*   **Bandurrias:** Está en la parte inferior derecha del mapa, al sur de Becacinas y al norte de Albatros.\n*   **Albatros:** Se encuentra en la parte inferior derecha del mapa, al sur de Bandurrias.\n\n### 3) Ubicación en la parte superior, media o inferior del mapa:\n*   **Superior:** Faisanes\n*   **Media:** Becacinas\n*   **Inferior:** Flamencos, Bandurrias, Albatros\n\n### 4) Ubicación de la entrada principal:\nLa entrada principal del condominio parece estar en la parte inferior izquierda del mapa, cerca del micro-condominio **Flamencos**. Se puede identificar por la presencia de varias señales de tránsito (triángulos rojos) y una señal verde que dice \"Laguna Norte\" apuntando hacia el interior del condominio.\n\n### 5) Calles, avenidas o referencias geográficas visibles:\n*   **Avenida Protectora del Mar:** Es la avenida que bordea el condominio por su lado oeste y norte. Es visible en la parte superior del mapa.\n*   **Laguna:** Hay una laguna o cuerpo de agua que se encuentra en la parte inferior izquierda del mapa, al este de la Avenida Protectora del Mar y al oeste de los micro-condominios Flamencos, Becacinas, Bandurrias y Albatros. El nombre \"Laguna Norte\" del condominio probablemente se debe a esta laguna.\n*   **Calle o Pasaje (sin nombre):** Existe una calle o pasaje que conecta la Avenida Protectora del Mar con el interior del condominio, pasando por el lado oeste de la laguna. Es visible en la parte inferior del mapa, cerca de la entrada principal.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1775872035,
+  "id": "202604110946424f7ffceda52c4ef4",
+  "model": "glm-4.6v",
+  "object": "chat.completion",
+  "request_id": "202604110946424f7ffceda52c4ef4",
+  "usage": {
+    "completion_tokens": 609,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 267,
+    "prompt_tokens_details": {
+      "cached_tokens": 4
+    },
+    "total_tokens": 876
+  }
+}
