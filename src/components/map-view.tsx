@@ -44,7 +44,6 @@ export interface PerimeterPoint {
   lng: number;
 }
 
-/* Edit sub-modes for the perimeter */
 export type PerimeterEditMode = "none" | "move" | "draw" | "vertices";
 
 interface MapViewProps {
@@ -58,13 +57,47 @@ interface MapViewProps {
   perimeterEditMode?: PerimeterEditMode;
 }
 
+/* localStorage helpers for persistence */
+const PERIMETER_KEY = "cyj-perimeter";
+const ENTRANCE_KEY = "cyj-entrance";
+
+function loadPerimeter(defaults: PerimeterPoint[]): PerimeterPoint[] {
+  try {
+    const raw = localStorage.getItem(PERIMETER_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length >= 3) return parsed;
+    }
+  } catch { /* ignore */ }
+  return defaults;
+}
+
+function savePerimeter(points: PerimeterPoint[]) {
+  try { localStorage.setItem(PERIMETER_KEY, JSON.stringify(points)); } catch { /* ignore */ }
+}
+
+function loadEntrance(defaults: { lat: number; lng: number }): { lat: number; lng: number } {
+  try {
+    const raw = localStorage.getItem(ENTRANCE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (typeof parsed.lat === "number" && typeof parsed.lng === "number") return parsed;
+    }
+  } catch { /* ignore */ }
+  return defaults;
+}
+
+function saveEntrance(pos: { lat: number; lng: number }) {
+  try { localStorage.setItem(ENTRANCE_KEY, JSON.stringify(pos)); } catch { /* ignore */ }
+}
+
 export default function MapView({
   condominios = [],
   editMode = false,
   onPositionChange,
-  entrance,
+  entrance: entranceProp,
   onEntranceChange,
-  perimeter,
+  perimeter: perimeterProp,
   onPerimeterChange,
   perimeterEditMode = "none",
 }: MapViewProps) {
@@ -73,14 +106,19 @@ export default function MapView({
   const condominioMarkersRef = useRef<Map<string, L.Marker>>(new Map());
   const entranceMarkerRef = useRef<L.Marker | null>(null);
   const polygonRef = useRef<L.Polygon | null>(null);
+  const moveOverlayRef = useRef<L.Rectangle | null>(null);
   const vertexMarkersRef = useRef<Map<number, L.Marker>>(new Map());
   const drawPointsRef = useRef<PerimeterPoint[]>([]);
   const drawPolylineRef = useRef<L.Polyline | null>(null);
   const drawTempMarkersRef = useRef<L.Marker[]>([]);
   const mapClickHandlerRef = useRef<((e: L.LeafletMouseEvent) => void) | null>(null);
+
+  /* Move mode refs */
   const isDraggingRef = useRef(false);
   const dragStartRef = useRef<{ lat: number; lng: number } | null>(null);
   const origPerimeterRef = useRef<PerimeterPoint[] | null>(null);
+  const moveMouseMoveRef = useRef<((e: L.LeafletMouseEvent) => void) | null>(null);
+  const moveMouseUpRef = useRef<((e: L.LeafletMouseEvent) => void) | null>(null);
 
   const DEFAULT_PERIMETER: PerimeterPoint[] = [
     { lat: -33.3250, lng: -70.7610 },
@@ -89,7 +127,26 @@ export default function MapView({
     { lat: -33.3298, lng: -70.7610 },
   ];
 
-  const currentPerimeter = perimeter && perimeter.length >= 3 ? perimeter : DEFAULT_PERIMETER;
+  /* Use persisted perimeter if prop not provided, else prop */
+  const currentPerimeter = perimeterProp && perimeterProp.length >= 3
+    ? perimeterProp
+    : loadPerimeter(DEFAULT_PERIMETER);
+
+  /* Persisted entrance */
+  const persistedEntrance = loadEntrance({ lat: -33.3298, lng: -70.7630 });
+  const currentEntrance = entranceProp || persistedEntrance;
+
+  /* Save perimeter to localStorage whenever it changes */
+  useEffect(() => {
+    if (currentPerimeter.length >= 3) {
+      savePerimeter(currentPerimeter);
+    }
+  }, [currentPerimeter]);
+
+  /* Save entrance to localStorage whenever it changes */
+  useEffect(() => {
+    saveEntrance(currentEntrance);
+  }, [currentEntrance]);
 
   /* Clean up draw mode artifacts */
   const cleanupDraw = useCallback(() => {
@@ -105,6 +162,30 @@ export default function MapView({
     if (mapClickHandlerRef.current) {
       map.off("click", mapClickHandlerRef.current);
       mapClickHandlerRef.current = null;
+    }
+  }, []);
+
+  /* Clean up move mode */
+  const cleanupMove = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (moveOverlayRef.current) {
+      map.removeLayer(moveOverlayRef.current);
+      moveOverlayRef.current = null;
+    }
+    if (moveMouseMoveRef.current) {
+      map.off("mousemove", moveMouseMoveRef.current);
+      moveMouseMoveRef.current = null;
+    }
+    if (moveMouseUpRef.current) {
+      map.off("mouseup", moveMouseUpRef.current);
+      moveMouseUpRef.current = null;
+    }
+    isDraggingRef.current = false;
+    dragStartRef.current = null;
+    origPerimeterRef.current = null;
+    if (map.dragging && !map.dragging.enabled()) {
+      map.dragging.enable();
     }
   }, []);
 
@@ -128,10 +209,11 @@ export default function MapView({
 
     return () => {
       cleanupDraw();
+      cleanupMove();
       map.remove();
       mapRef.current = null;
     };
-  }, [cleanupDraw]);
+  }, [cleanupDraw, cleanupMove]);
 
   /* When switching away from draw mode, clean up */
   useEffect(() => {
@@ -139,6 +221,13 @@ export default function MapView({
       cleanupDraw();
     }
   }, [perimeterEditMode, cleanupDraw]);
+
+  /* When switching away from move mode, clean up */
+  useEffect(() => {
+    if (perimeterEditMode !== "move") {
+      cleanupMove();
+    }
+  }, [perimeterEditMode, cleanupMove]);
 
   /* ─── DRAW MODE: click to place points ─── */
   useEffect(() => {
@@ -188,75 +277,39 @@ export default function MapView({
     };
   }, [perimeterEditMode, onPerimeterChange, cleanupDraw]);
 
-  /* ─── POLYGON + VERTEX / MOVE rendering ─── */
+  /* ─── POLYGON + VERTEX rendering (non-draw, non-move) ─── */
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || perimeterEditMode === "draw") return;
+    if (!map) return;
+    if (perimeterEditMode === "draw" || perimeterEditMode === "move") {
+      /* In draw or move mode, still show the polygon as reference */
+    }
+    if (perimeterEditMode === "draw") return;
 
-    /* Remove old */
+    /* Remove old polygon */
     if (polygonRef.current) {
       map.removeLayer(polygonRef.current);
       polygonRef.current = null;
     }
+
+    /* Remove old vertex markers */
     vertexMarkersRef.current.forEach((m) => map.removeLayer(m));
     vertexMarkersRef.current.clear();
-    isDraggingRef.current = false;
-    dragStartRef.current = null;
-    origPerimeterRef.current = null;
-
-    /* Remove any existing map click handlers for move mode */
-    if (mapClickHandlerRef.current) {
-      map.off("click", mapClickHandlerRef.current);
-      mapClickHandlerRef.current = null;
-    }
 
     if (currentPerimeter.length < 3) return;
 
     const latLngs = currentPerimeter.map((p) => [p.lat, p.lng] as L.LatLngExpression);
-
-    /* Draw polygon */
     const isEditing = editMode && onPerimeterChange;
-    const isMoveMode = perimeterEditMode === "move";
     const isVertexMode = perimeterEditMode === "vertices";
 
     polygonRef.current = L.polygon(latLngs, {
-      color: isMoveMode ? "#2563eb" : isVertexMode ? "#dc2626" : (isEditing ? "#dc2626" : "#0f4c81"),
-      weight: isMoveMode || isVertexMode ? 3 : 2,
-      dashArray: isMoveMode || isVertexMode ? undefined : "8, 6",
-      fillColor: isMoveMode ? "#2563eb" : isVertexMode ? "#dc2626" : (isEditing ? "#dc2626" : "#0f4c81"),
-      fillOpacity: isMoveMode ? 0.12 : isVertexMode ? 0.08 : (isEditing ? 0.06 : 0.04),
-      cursor: isMoveMode ? "move" : undefined,
+      color: isVertexMode ? "#dc2626" : (isEditing ? "#0f4c81" : "#0f4c81"),
+      weight: isVertexMode ? 3 : 2,
+      dashArray: isVertexMode ? undefined : "8, 6",
+      fillColor: isVertexMode ? "#dc2626" : "#0f4c81",
+      fillOpacity: isVertexMode ? 0.08 : (isEditing ? 0.06 : 0.04),
+      interactive: false, /* prevent Leaflet SVG event issues */
     }).addTo(map);
-
-    /* ── MOVE MODE: drag whole polygon ── */
-    if (isMoveMode && onPerimeterChange) {
-      polygonRef.current.on("mousedown", (e: L.LeafletMouseEvent) => {
-        isDraggingRef.current = true;
-        dragStartRef.current = { lat: e.latlng.lat, lng: e.latlng.lng };
-        origPerimeterRef.current = currentPerimeter.map((p) => ({ ...p }));
-        map.dragging.disable();
-      });
-
-      map.on("mousemove", (e: L.LeafletMouseEvent) => {
-        if (!isDraggingRef.current || !dragStartRef.current || !origPerimeterRef.current) return;
-        const dLat = e.latlng.lat - dragStartRef.current.lat;
-        const dLng = e.latlng.lng - dragStartRef.current.lng;
-        const moved = origPerimeterRef.current.map((p) => ({
-          lat: p.lat + dLat,
-          lng: p.lng + dLng,
-        }));
-        onPerimeterChange(moved);
-      });
-
-      map.on("mouseup", () => {
-        if (isDraggingRef.current) {
-          isDraggingRef.current = false;
-          dragStartRef.current = null;
-          origPerimeterRef.current = null;
-          map.dragging.enable();
-        }
-      });
-    }
 
     /* ── VERTEX MODE: individual vertex markers ── */
     if (isVertexMode && onPerimeterChange) {
@@ -301,26 +354,6 @@ export default function MapView({
         vMarker.addTo(map);
         vertexMarkersRef.current.set(idx, vMarker);
       });
-
-      /* Click on polygon edge to add vertex */
-      polygonRef.current.on("click", (e: L.LeafletMouseEvent) => {
-        const { lat, lng } = e.latlng;
-        let bestIdx = 0;
-        let bestDist = Infinity;
-        for (let i = 0; i < currentPerimeter.length; i++) {
-          const j = (i + 1) % currentPerimeter.length;
-          const mx = (currentPerimeter[i].lat + currentPerimeter[j].lat) / 2;
-          const my = (currentPerimeter[i].lng + currentPerimeter[j].lng) / 2;
-          const d = Math.hypot(lat - mx, lng - my);
-          if (d < bestDist) {
-            bestDist = d;
-            bestIdx = j;
-          }
-        }
-        const updated = [...currentPerimeter];
-        updated.splice(bestIdx, 0, { lat, lng });
-        onPerimeterChange(updated);
-      });
     }
 
     return () => {
@@ -330,10 +363,92 @@ export default function MapView({
       }
       vertexMarkersRef.current.forEach((m) => map.removeLayer(m));
       vertexMarkersRef.current.clear();
-      map.off("mousemove");
-      map.off("mouseup");
     };
   }, [currentPerimeter, editMode, onPerimeterChange, perimeterEditMode]);
+
+  /* ─── MOVE MODE: drag whole polygon via transparent overlay ─── */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || perimeterEditMode !== "move" || !onPerimeterChange) return;
+
+    cleanupMove();
+
+    if (currentPerimeter.length < 3) return;
+
+    const latLngs = currentPerimeter.map((p) => [p.lat, p.lng] as L.LatLngExpression);
+
+    /* Remove the default polygon first (drawn by the other useEffect) since move mode handles its own */
+    if (polygonRef.current) {
+      map.removeLayer(polygonRef.current);
+      polygonRef.current = null;
+    }
+
+    /* Draw the move-mode polygon (visual only, non-interactive) */
+    polygonRef.current = L.polygon(latLngs, {
+      color: "#2563eb",
+      weight: 3,
+      fillColor: "#2563eb",
+      fillOpacity: 0.12,
+      interactive: false,
+    }).addTo(map);
+
+    /* Calculate bounding box for the overlay */
+    const bounds = L.latLngBounds(latLngs);
+    const pad = 0.00003; /* Small padding so the overlay fully covers the polygon */
+    const paddedBounds = L.latLngBounds(
+      [bounds.getSouth() - pad, bounds.getWest() - pad],
+      [bounds.getNorth() + pad, bounds.getEast() + pad]
+    );
+
+    /* Transparent overlay rectangle that captures drag events */
+    moveOverlayRef.current = L.rectangle(paddedBounds, {
+      color: "transparent",
+      weight: 0,
+      fillColor: "transparent",
+      fillOpacity: 0,
+      interactive: true,
+    }).addTo(map);
+
+    /* Handler references for cleanup */
+    const handleMouseMove = (e: L.LeafletMouseEvent) => {
+      if (!isDraggingRef.current || !dragStartRef.current || !origPerimeterRef.current) return;
+      const dLat = e.latlng.lat - dragStartRef.current.lat;
+      const dLng = e.latlng.lng - dragStartRef.current.lng;
+      const moved = origPerimeterRef.current.map((p) => ({
+        lat: p.lat + dLat,
+        lng: p.lng + dLng,
+      }));
+      onPerimeterChange(moved);
+    };
+
+    const handleMouseUp = () => {
+      if (isDraggingRef.current) {
+        isDraggingRef.current = false;
+        dragStartRef.current = null;
+        origPerimeterRef.current = null;
+        if (map.dragging) map.dragging.enable();
+      }
+    };
+
+    /* mousedown on the overlay starts the drag */
+    moveOverlayRef.current.on("mousedown", (e: L.LeafletMouseEvent) => {
+      L.DomEvent.stopPropagation(e.originalEvent);
+      L.DomEvent.preventDefault(e.originalEvent);
+      isDraggingRef.current = true;
+      dragStartRef.current = { lat: e.latlng.lat, lng: e.latlng.lng };
+      origPerimeterRef.current = currentPerimeter.map((p) => ({ ...p }));
+      if (map.dragging) map.dragging.disable();
+    });
+
+    moveMouseMoveRef.current = handleMouseMove;
+    moveMouseUpRef.current = handleMouseUp;
+    map.on("mousemove", handleMouseMove);
+    map.on("mouseup", handleMouseUp);
+
+    return () => {
+      cleanupMove();
+    };
+  }, [currentPerimeter, editMode, onPerimeterChange, perimeterEditMode, cleanupMove]);
 
   /* ─── ENTRANCE MARKER ─── */
   useEffect(() => {
@@ -345,9 +460,7 @@ export default function MapView({
       entranceMarkerRef.current = null;
     }
 
-    const pos = entrance
-      ? [entrance.lat, entrance.lng] as L.LatLngExpression
-      : DEFAULT_ENTRANCE;
+    const pos = [currentEntrance.lat, currentEntrance.lng] as L.LatLngExpression;
 
     const borderCol = editMode ? "#fca5a5" : "white";
     const bgCol = editMode ? "#dc2626" : "#16a34a";
@@ -379,6 +492,7 @@ export default function MapView({
     if (editMode && onEntranceChange) {
       marker.on("dragend", () => {
         const p = marker.getLatLng();
+        saveEntrance({ lat: p.lat, lng: p.lng });
         onEntranceChange(p.lat, p.lng);
       });
     }
@@ -392,7 +506,7 @@ export default function MapView({
         entranceMarkerRef.current = null;
       }
     };
-  }, [entrance, editMode, onEntranceChange]);
+  }, [currentEntrance, editMode, onEntranceChange]);
 
   /* ─── CONDOMINIO MARKERS ─── */
   useEffect(() => {
@@ -408,8 +522,6 @@ export default function MapView({
         : (DEFAULT_POSITIONS[c.id] || MAP_CENTER);
 
       const color = BARRIO_COLORS[c.id] || "#64748b";
-      const isDeptos = c.type === "torres" || c.type === "deptos";
-      const label = isDeptos ? "Deptos" : "Casas";
       const borderCol = editMode ? "#fca5a5" : "white";
 
       const cIcon = L.divIcon({
@@ -447,6 +559,8 @@ export default function MapView({
         });
       }
 
+      const isDeptos = c.type === "torres" || c.type === "deptos";
+      const label = isDeptos ? "Deptos" : "Casas";
       marker.addTo(map).bindPopup(
         `<strong>${c.name}</strong><br>${label}<br>Condominio Laguna Norte`
       );

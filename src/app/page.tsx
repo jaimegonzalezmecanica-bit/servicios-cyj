@@ -965,13 +965,33 @@ function MapTab({ currentRole, towers, onTowersChange }: { currentRole: any; tow
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedToast, setSavedToast] = useState(false);
-  const [entrance, setEntrance] = useState({ lat: -33.3298, lng: -70.7630 });
-  const [perimeter, setPerimeter] = useState([
-    { lat: -33.3250, lng: -70.7610 },
-    { lat: -33.3250, lng: -70.7650 },
-    { lat: -33.3298, lng: -70.7650 },
-    { lat: -33.3298, lng: -70.7610 },
-  ]);
+
+  /* Load persisted perimeter and entrance from localStorage */
+  const [perimeter, setPerimeter] = useState(() => {
+    try {
+      const raw = localStorage.getItem("cyj-perimeter");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length >= 3) return parsed;
+      }
+    } catch { /* ignore */ }
+    return [
+      { lat: -33.3250, lng: -70.7610 },
+      { lat: -33.3250, lng: -70.7650 },
+      { lat: -33.3298, lng: -70.7650 },
+      { lat: -33.3298, lng: -70.7610 },
+    ];
+  });
+  const [entrance, setEntrance] = useState(() => {
+    try {
+      const raw = localStorage.getItem("cyj-entrance");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (typeof parsed.lat === "number" && typeof parsed.lng === "number") return parsed;
+      }
+    } catch { /* ignore */ }
+    return { lat: -33.3298, lng: -70.7630 };
+  });
   const [perimeterMode, setPerimeterMode] = useState<"none" | "move" | "draw" | "vertices">("none");
 
   const canEdit = currentRole?.permissions?.canViewStats || currentRole?.role === "super_admin" || currentRole?.role === "admin";
@@ -994,12 +1014,14 @@ function MapTab({ currentRole, towers, onTowersChange }: { currentRole: any; tow
 
   const handleEntranceChange = useCallback((lat: number, lng: number) => {
     setEntrance({ lat, lng });
+    try { localStorage.setItem("cyj-entrance", JSON.stringify({ lat, lng })); } catch { /* ignore */ }
     setSavedToast(true);
     setTimeout(() => setSavedToast(false), 2500);
   }, []);
 
   const handlePerimeterChange = useCallback((points: { lat: number; lng: number }[]) => {
     setPerimeter(points);
+    try { localStorage.setItem("cyj-perimeter", JSON.stringify(points)); } catch { /* ignore */ }
   }, []);
 
   const toggleEditMode = () => {
@@ -1016,12 +1038,14 @@ function MapTab({ currentRole, towers, onTowersChange }: { currentRole: any; tow
   };
 
   const resetPerimeter = () => {
-    setPerimeter([
+    const defaults = [
       { lat: -33.3250, lng: -70.7610 },
       { lat: -33.3250, lng: -70.7650 },
       { lat: -33.3298, lng: -70.7650 },
       { lat: -33.3298, lng: -70.7610 },
-    ]);
+    ];
+    setPerimeter(defaults);
+    try { localStorage.setItem("cyj-perimeter", JSON.stringify(defaults)); } catch { /* ignore */ }
     setPerimeterMode("none");
     setSavedToast(true);
     setTimeout(() => setSavedToast(false), 2500);
