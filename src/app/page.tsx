@@ -1294,37 +1294,30 @@ export interface SOSData {
   time: string;
 }
 
-function MapTab({ currentRole, towers, onTowersChange, sosAlert, activeSOSAlerts, mapTarget }: { currentRole: any; towers: any[]; onTowersChange: (t: any[]) => void; sosAlert?: SOSData | null; activeSOSAlerts?: any[]; mapTarget?: { lat: number; lng: number } | null }) {
+function MapTab({ currentRole, towers, onTowersChange, sosAlert, activeSOSAlerts, mapTarget, perimeter: perimeterProp, entrance: entranceProp, onPerimeterChange, onEntranceChange }: { currentRole: any; towers: any[]; onTowersChange: (t: any[]) => void; sosAlert?: SOSData | null; activeSOSAlerts?: any[]; mapTarget?: { lat: number; lng: number } | null; perimeter?: { lat: number; lng: number }[]; entrance?: { lat: number; lng: number }; onPerimeterChange?: (p: { lat: number; lng: number }[]) => void; onEntranceChange?: (e: { lat: number; lng: number }) => void }) {
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedToast, setSavedToast] = useState(false);
 
-  /* Load persisted perimeter and entrance from localStorage */
-  const [perimeter, setPerimeter] = useState(() => {
-    try {
-      const raw = localStorage.getItem("cyj-perimeter");
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length >= 3) return parsed;
-      }
-    } catch { /* ignore */ }
-    return [
-      { lat: -33.3250, lng: -70.7610 },
-      { lat: -33.3250, lng: -70.7650 },
-      { lat: -33.3298, lng: -70.7650 },
-      { lat: -33.3298, lng: -70.7610 },
-    ];
-  });
-  const [entrance, setEntrance] = useState(() => {
-    try {
-      const raw = localStorage.getItem("cyj-entrance");
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (typeof parsed.lat === "number" && typeof parsed.lng === "number") return parsed;
-      }
-    } catch { /* ignore */ }
-    return { lat: -33.3298, lng: -70.7630 };
-  });
+  /* Use server-provided perimeter and entrance (shared across all devices) */
+  const defaultPerimeter = [
+    { lat: -33.3250, lng: -70.7610 },
+    { lat: -33.3250, lng: -70.7650 },
+    { lat: -33.3298, lng: -70.7650 },
+    { lat: -33.3298, lng: -70.7610 },
+  ];
+  const defaultEntrance = { lat: -33.3298, lng: -70.7630 };
+
+  const [perimeter, setPerimeter] = useState(perimeterProp || defaultPerimeter);
+  const [entrance, setEntrance] = useState(entranceProp || defaultEntrance);
+
+  // Sync with server props when they change
+  useEffect(() => {
+    if (perimeterProp && perimeterProp.length >= 3) setPerimeter(perimeterProp);
+  }, [perimeterProp]);
+  useEffect(() => {
+    if (entranceProp && entranceProp.lat) setEntrance(entranceProp);
+  }, [entranceProp]);
   const [perimeterMode, setPerimeterMode] = useState<"none" | "move" | "draw" | "vertices">("none");
 
   const canEdit = currentRole?.permissions?.canViewStats || currentRole?.role === "super_admin" || currentRole?.role === "admin";
@@ -1338,12 +1331,7 @@ function MapTab({ currentRole, towers, onTowersChange, sosAlert, activeSOSAlerts
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ towerId: id, lat, lng }),
       });
-      /* Also save to permanent position backup (offline-api also does this) */
-      try {
-        const saved = JSON.parse(localStorage.getItem("cyj_marker_positions") || "{}");
-        saved[id] = { lat, lng };
-        localStorage.setItem("cyj_marker_positions", JSON.stringify(saved));
-      } catch { /* ignore */ }
+      // Position saved to server - all devices will get it on next load
       setSavedToast(true);
       setTimeout(() => setSavedToast(false), 2500);
     } catch { /* silent */ } finally {
@@ -1353,14 +1341,24 @@ function MapTab({ currentRole, towers, onTowersChange, sosAlert, activeSOSAlerts
 
   const handleEntranceChange = useCallback((lat: number, lng: number) => {
     setEntrance({ lat, lng });
-    try { localStorage.setItem("cyj-entrance", JSON.stringify({ lat, lng })); } catch { /* ignore */ }
+    // Save to server so all devices get the same entrance
+    fetch("/api/map-config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: "entrance", value: { lat, lng } }),
+    }).catch(() => {});
     setSavedToast(true);
     setTimeout(() => setSavedToast(false), 2500);
   }, []);
 
   const handlePerimeterChange = useCallback((points: { lat: number; lng: number }[]) => {
     setPerimeter(points);
-    try { localStorage.setItem("cyj-perimeter", JSON.stringify(points)); } catch { /* ignore */ }
+    // Save to server so all devices get the same perimeter
+    fetch("/api/map-config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: "perimeter", value: points }),
+    }).catch(() => {});
   }, []);
 
   const toggleEditMode = () => {
@@ -1384,7 +1382,12 @@ function MapTab({ currentRole, towers, onTowersChange, sosAlert, activeSOSAlerts
       { lat: -33.3298, lng: -70.7610 },
     ];
     setPerimeter(defaults);
-    try { localStorage.setItem("cyj-perimeter", JSON.stringify(defaults)); } catch { /* ignore */ }
+    // Save to server
+    fetch("/api/map-config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: "perimeter", value: defaults }),
+    }).catch(() => {});
     setPerimeterMode("none");
     setSavedToast(true);
     setTimeout(() => setSavedToast(false), 2500);
@@ -3138,48 +3141,39 @@ export default function HomePage() {
   const [guardsList, setGuardsList] = useState<GuardOnDuty[]>(mockGuards);
 
   /* ─── STATEFUL TOWERS ─── */
-  const [towersList, setTowersList] = useState<Conjunto[]>(() => {
-    // Initialize with positions from permanent backup (offline-api guarantees this)
-    try {
-      const saved = JSON.parse(localStorage.getItem("cyj_marker_positions") || "{}");
-      if (typeof saved === "object" && saved !== null && Object.keys(saved).length > 0) {
-        return towers.map((t: any) => {
-          if (saved[t.id] && typeof saved[t.id].lat === "number") {
-            return { ...t, lat: saved[t.id].lat, lng: saved[t.id].lng };
-          }
-          return t;
-        });
-      }
-    } catch { /* ignore */ }
-    // First launch: bake FIXED_POSITIONS into towers and save immediately
-    const initialized = towers.map((t: any) => {
-      try {
-        const saved = JSON.parse(localStorage.getItem("cyj_marker_positions") || "{}");
-        if (saved[t.id]) return { ...t, lat: saved[t.id].lat, lng: saved[t.id].lng };
-      } catch { /* ignore */ }
-      return t;
-    });
-    return initialized;
-  });
+  /* ─── LOAD MAP CONFIG FROM SERVER (shared across all devices) ─── */
+  const [mapPerimeter, setMapPerimeter] = useState<{ lat: number; lng: number }[]>([
+    { lat: -33.3250, lng: -70.7610 },
+    { lat: -33.3250, lng: -70.7650 },
+    { lat: -33.3298, lng: -70.7650 },
+    { lat: -33.3298, lng: -70.7610 },
+  ]);
+  const [mapEntrance, setMapEntrance] = useState({ lat: -33.3298, lng: -70.7630 });
+  const [towersList, setTowersList] = useState<Conjunto[]>([]);
 
-  /* Load towers from API (offline-api intercepts and ensures positions) */
+  /* Load towers and map config from server (shared database) */
   useEffect(() => {
     const loadTowers = async () => {
       try {
         const res = await fetch("/api/towers");
         const data = await res.json();
         if (data.towers && Array.isArray(data.towers)) {
-          // Merge: API towers take priority, but always respect saved positions
-          const saved = JSON.parse(localStorage.getItem("cyj_marker_positions") || "{}");
-          const merged = data.towers.map((t: any) => {
-            if (saved[t.id] && typeof saved[t.id].lat === "number") {
-              return { ...t, lat: saved[t.id].lat, lng: saved[t.id].lng };
-            }
-            return t;
-          });
-          setTowersList(merged);
+          // Towers come directly from server DB - no localStorage override
+          setTowersList(data.towers);
         }
       } catch { /* use initialized state */ }
+
+      // Also load map config (perimeter, entrance) from server
+      try {
+        const configRes = await fetch("/api/map-config");
+        const configData = await configRes.json();
+        if (configData.perimeter && Array.isArray(configData.perimeter)) {
+          setMapPerimeter(configData.perimeter);
+        }
+        if (configData.entrance && typeof configData.entrance.lat === "number") {
+          setMapEntrance(configData.entrance);
+        }
+      } catch { /* use defaults */ }
     };
     loadTowers();
   }, []);
@@ -3431,7 +3425,7 @@ export default function HomePage() {
     switch (activeTab) {
       case "home": return <HomeTab currentUser={currentUser} currentRole={role} alerts={alerts} announcements={announcementsList} onNavigate={handleNavigate} onSOSActivate={handleSOSActivate} />;
       case "report": return <ReportTab onNavigate={handleNavigate} onReportSubmitted={handleReportSubmitted} />;
-      case "map": return <MapTab currentRole={role} towers={towersList} onTowersChange={setTowersList} sosAlert={sosAlert || incomingSOS} activeSOSAlerts={activeSOSAlerts} mapTarget={mapTargetAlert} />;
+      case "map": return <MapTab currentRole={role} towers={towersList} onTowersChange={setTowersList} sosAlert={sosAlert || incomingSOS} activeSOSAlerts={activeSOSAlerts} mapTarget={mapTargetAlert} perimeter={mapPerimeter} entrance={mapEntrance} onPerimeterChange={setMapPerimeter} onEntranceChange={setMapEntrance} />;
       case "alerts": return <AlertsTab alerts={alerts} currentRole={role} onAlertsChange={setAlerts} onNavigateToMapAlert={handleNavigateToMapAlert} />;
       case "roles": return <RolesTab currentUser={currentUser} currentRole={role} users={users} onUsersChange={setUsers} />;
       case "admin": return <AdminTab currentRole={role} alerts={alerts} announcements={announcementsList} onAnnouncementsChange={setAnnouncementsList} guards={guardsList} onGuardsChange={setGuardsList} towers={towersList} onTowersChange={setTowersList} currentUser={currentUser} />;

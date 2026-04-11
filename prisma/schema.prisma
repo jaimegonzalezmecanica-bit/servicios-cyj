@@ -113,3 +113,14 @@ model Guard {
   phone     String
   createdAt DateTime @default(now())
 }
+
+/* ═══════════════════════════════════════════════════════════
+   MAP CONFIGURATION (shared across all devices)
+   ═══════════════════════════════════════════════════════════ */
+
+model MapConfig {
+  id       String @id @default("main") // Single row config
+  key      String @unique // e.g. "perimeter", "entrance"
+  value    String // JSON-encoded value
+  updatedAt DateTime @updatedAt
+}
