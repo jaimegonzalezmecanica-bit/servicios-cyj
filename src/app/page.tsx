@@ -1013,6 +1013,12 @@ function MapTab({ currentRole, towers, onTowersChange, sosAlert }: { currentRole
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ towerId: id, lat, lng }),
       });
+      /* Also save to localStorage as backup (survives server restarts) */
+      try {
+        const saved = JSON.parse(localStorage.getItem("cyj-marker-positions") || "{}");
+        saved[id] = { lat, lng };
+        localStorage.setItem("cyj-marker-positions", JSON.stringify(saved));
+      } catch { /* ignore */ }
       setSavedToast(true);
       setTimeout(() => setSavedToast(false), 2500);
     } catch { /* silent */ } finally {
@@ -2563,6 +2569,48 @@ export default function HomePage() {
 
   /* ─── STATEFUL TOWERS ─── */
   const [towersList, setTowersList] = useState<Tower[]>(towers);
+
+  /* Load towers from API on mount, then merge localStorage marker positions */
+  useEffect(() => {
+    fetch("/api/towers")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.towers && Array.isArray(data.towers)) {
+          /* Merge any localStorage-saved positions on top */
+          try {
+            const saved = JSON.parse(localStorage.getItem("cyj-marker-positions") || "{}");
+            if (typeof saved === "object" && saved !== null) {
+              const merged = data.towers.map((t: any) => {
+                if (saved[t.id] && typeof saved[t.id].lat === "number") {
+                  return { ...t, lat: saved[t.id].lat, lng: saved[t.id].lng };
+                }
+                return t;
+              });
+              setTowersList(merged);
+            } else {
+              setTowersList(data.towers);
+            }
+          } catch {
+            setTowersList(data.towers);
+          }
+        }
+      })
+      .catch(() => {
+        /* API failed: load static data + localStorage positions */
+        try {
+          const saved = JSON.parse(localStorage.getItem("cyj-marker-positions") || "{}");
+          if (typeof saved === "object" && saved !== null && Object.keys(saved).length > 0) {
+            const merged = towers.map((t: any) => {
+              if (saved[t.id] && typeof saved[t.id].lat === "number") {
+                return { ...t, lat: saved[t.id].lat, lng: saved[t.id].lng };
+              }
+              return t;
+            });
+            setTowersList(merged);
+          }
+        } catch { /* use static data as-is */ }
+      });
+  }, []);
 
   /* PWA install prompt */
   useEffect(() => {
