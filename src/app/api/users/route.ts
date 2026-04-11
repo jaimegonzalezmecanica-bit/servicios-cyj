@@ -1,15 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ensureSeeded, getAllUsers, addUser, updateUser, deleteUser } from "@/lib/store";
 import { ROLES, type RoleId } from "@/lib/mock-data";
-import { getAllUsers, addUser, updateUser, deleteUser } from "@/lib/store";
 
 export async function GET() {
-  // Return users without password field
-  const safeUsers = getAllUsers().map(({ password: _, ...rest }) => rest);
-  return NextResponse.json({ users: safeUsers });
+  try {
+    await ensureSeeded();
+    const users = await getAllUsers();
+    const safeUsers = users.map(({ password: _, ...rest }) => rest);
+    return NextResponse.json({ users: safeUsers });
+  } catch (error) {
+    console.error('[API /users GET] Error:', error);
+    return NextResponse.json({ users: [] });
+  }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    await ensureSeeded();
     const body = await request.json();
     const { name, role, conjunto, unit, phone, email, password } = body;
 
@@ -29,7 +36,6 @@ export async function POST(request: NextRequest) {
     }
 
     const newUser = {
-      id: `u_${Date.now()}`,
       name,
       role: role as RoleId,
       roleName: roleData.name,
@@ -40,15 +46,14 @@ export async function POST(request: NextRequest) {
       online: true,
       memberSince: new Date().getFullYear().toString(),
       avatarInitial: name.charAt(0).toUpperCase(),
-      password: password || "cyj2025", // Default password for new users
+      password: password || "cyj2025",
     };
 
-    addUser(newUser);
-
-    // Return without password
-    const { password: _, ...safeUser } = newUser;
+    const created = await addUser(newUser);
+    const { password: _, ...safeUser } = created;
     return NextResponse.json({ success: true, user: safeUser });
-  } catch {
+  } catch (error) {
+    console.error('[API /users POST] Error:', error);
     return NextResponse.json(
       { success: false, error: "Error al crear usuario" },
       { status: 500 }
@@ -58,6 +63,7 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    await ensureSeeded();
     const body = await request.json();
     const { userId, role, name, phone, email, conjunto, unit, password } = body;
 
@@ -72,10 +78,7 @@ export async function PUT(request: NextRequest) {
     if (role) {
       const roleData = ROLES.find((r) => r.id === role);
       if (!roleData) {
-        return NextResponse.json(
-          { success: false, error: "Rol no válido" },
-          { status: 400 }
-        );
+        return NextResponse.json({ success: false, error: "Rol no válido" }, { status: 400 });
       }
       updates.role = role;
       updates.roleName = roleData.name;
@@ -87,52 +90,38 @@ export async function PUT(request: NextRequest) {
     if (unit !== undefined) updates.unit = unit;
     if (password) updates.password = password;
 
-    const updated = updateUser(userId, updates);
+    const updated = await updateUser(userId, updates);
     if (!updated) {
-      return NextResponse.json(
-        { success: false, error: "Usuario no encontrado" },
-        { status: 404 }
-      );
+      return NextResponse.json({ success: false, error: "Usuario no encontrado" }, { status: 404 });
     }
 
-    // Return without password
     const { password: _, ...safeUser } = updated;
     return NextResponse.json({ success: true, user: safeUser });
-  } catch {
-    return NextResponse.json(
-      { success: false, error: "Error al actualizar usuario" },
-      { status: 500 }
-    );
+  } catch (error) {
+    console.error('[API /users PUT] Error:', error);
+    return NextResponse.json({ success: false, error: "Error al actualizar usuario" }, { status: 500 });
   }
 }
 
 export async function DELETE(request: NextRequest) {
   try {
+    await ensureSeeded();
     const body = await request.json();
     const { userId } = body;
 
     if (!userId) {
-      return NextResponse.json(
-        { success: false, error: "ID de usuario requerido" },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: "ID de usuario requerido" }, { status: 400 });
     }
 
-    const deleted = deleteUser(userId);
+    const deleted = await deleteUser(userId);
     if (!deleted) {
-      return NextResponse.json(
-        { success: false, error: "Usuario no encontrado" },
-        { status: 404 }
-      );
+      return NextResponse.json({ success: false, error: "Usuario no encontrado" }, { status: 404 });
     }
 
-    // Return without password
     const { password: _, ...safeUser } = deleted;
     return NextResponse.json({ success: true, user: safeUser });
-  } catch {
-    return NextResponse.json(
-      { success: false, error: "Error al eliminar usuario" },
-      { status: 500 }
-    );
+  } catch (error) {
+    console.error('[API /users DELETE] Error:', error);
+    return NextResponse.json({ success: false, error: "Error al eliminar usuario" }, { status: 500 });
   }
 }

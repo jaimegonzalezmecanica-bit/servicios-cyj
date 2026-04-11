@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { addAlert, getAllAlerts, updateAlertStatus } from "@/lib/store";
+import { ensureSeeded, addAlert, getAllAlerts, updateAlertStatus, updateAlertResponse } from "@/lib/store";
 import { reportCategories } from "@/lib/mock-data";
 
 export async function POST(request: NextRequest) {
   try {
+    await ensureSeeded();
     const body = await request.json();
-    const { category, description, location, isAnonymous, priority, photo, lat, lng } = body;
+    const { category, description, location, isAnonymous, priority, photo, lat, lng, userId, userName, userConjunto } = body;
 
     if (!category || !description) {
       return NextResponse.json(
@@ -15,11 +16,9 @@ export async function POST(request: NextRequest) {
     }
 
     const isSOS = category === "sos";
-    // Find category icon from reportCategories
     const catData = reportCategories.find((c) => c.id === category);
 
     const newAlert = {
-      id: String(Date.now()),
       category: isSOS ? "sos" : (catData?.label || category),
       categoryIcon: isSOS ? "flag" : (catData?.icon || "flag"),
       title: isSOS
@@ -37,15 +36,20 @@ export async function POST(request: NextRequest) {
       lat: typeof lat === "number" ? lat : -33.3276,
       lng: typeof lng === "number" ? lng : -70.7630,
       photo: photo || null,
+      userId: userId || undefined,
+      userName: userName || "",
+      userConjunto: userConjunto || "",
     };
 
-    addAlert(newAlert);
+    const saved = await addAlert(newAlert);
+    console.log(`[API /alert] Created alert ${saved.id} (${saved.category}) by ${userName || 'anonymous'}`);
 
     return NextResponse.json({
       success: true,
-      alert: newAlert,
+      alert: saved,
     });
-  } catch {
+  } catch (error) {
+    console.error('[API /alert] Error:', error);
     return NextResponse.json(
       { success: false, error: "Error al crear alerta" },
       { status: 500 }
@@ -55,8 +59,9 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    await ensureSeeded();
     const body = await request.json();
-    const { alertId, status } = body;
+    const { alertId, status, responseText, responsePhoto } = body;
 
     if (!alertId || !status) {
       return NextResponse.json(
@@ -68,12 +73,12 @@ export async function PUT(request: NextRequest) {
     const validStatuses = ["activa", "en_revision", "resuelta"];
     if (!validStatuses.includes(status)) {
       return NextResponse.json(
-        { success: false, error: "Estado inválido. Use: activa, en_revision, resuelta" },
+        { success: false, error: "Estado inválido" },
         { status: 400 }
       );
     }
 
-    const updated = updateAlertStatus(alertId, status);
+    const updated = await updateAlertStatus(alertId, status);
     if (!updated) {
       return NextResponse.json(
         { success: false, error: "Alerta no encontrada" },
@@ -81,8 +86,16 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    // If response text/photo provided, update that too
+    if (responseText) {
+      await updateAlertResponse(alertId, responseText, responsePhoto);
+    }
+
+    console.log(`[API /alert] Updated alert ${alertId} → ${status}`);
+
     return NextResponse.json({ success: true, alert: updated });
-  } catch {
+  } catch (error) {
+    console.error('[API /alert] Error:', error);
     return NextResponse.json(
       { success: false, error: "Error al actualizar alerta" },
       { status: 500 }
@@ -91,8 +104,15 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function GET() {
-  const allAlerts = getAllAlerts();
-  return NextResponse.json({
-    alerts: allAlerts,
-  });
+  try {
+    await ensureSeeded();
+    const allAlerts = await getAllAlerts();
+    return NextResponse.json({ alerts: allAlerts });
+  } catch (error) {
+    console.error('[API /alert GET] Error:', error);
+    return NextResponse.json(
+      { success: false, error: "Error al obtener alertas" },
+      { status: 500 }
+    );
+  }
 }

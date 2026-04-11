@@ -1,10 +1,19 @@
 import { NextResponse } from "next/server";
-import { getAllAlerts } from "@/lib/store";
+import { ensureSeeded, getAllAlerts } from "@/lib/store";
 
 export async function GET() {
-  const allAlerts = getAllAlerts();
-  return NextResponse.json({
-    alerts: allAlerts,
-    total: allAlerts.length,
-  });
+  try {
+    await ensureSeeded();
+    const allAlerts = await getAllAlerts();
+    return NextResponse.json({
+      alerts: allAlerts,
+      total: allAlerts.length,
+    });
+  } catch (error) {
+    console.error('[API /alerts] Error:', error);
+    return NextResponse.json(
+      { success: false, error: "Error al obtener alertas" },
+      { status: 500 }
+    );
+  }
 }

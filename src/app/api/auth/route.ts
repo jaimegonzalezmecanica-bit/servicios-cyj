@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { findUserByIdentifier } from "@/lib/store";
+import { ensureSeeded, findUserByIdentifier } from "@/lib/store";
 
 export async function POST(request: NextRequest) {
   try {
+    await ensureSeeded();
     const body = await request.json();
     const { identifier, password } = body;
 
@@ -13,7 +14,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = findUserByIdentifier(identifier);
+    const user = await findUserByIdentifier(identifier);
 
     if (!user) {
       return NextResponse.json(
@@ -22,7 +23,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Password validation
     if (password !== user.password) {
       return NextResponse.json(
         { success: false, error: "Contraseña incorrecta" },
@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       user: {
+        id: user.id,
         name: user.name,
         role: user.role,
         roleName: user.roleName,
@@ -48,7 +49,8 @@ export async function POST(request: NextRequest) {
         familyMembers: user.role === "familiar" ? 0 : 2,
       },
     });
-  } catch {
+  } catch (error) {
+    console.error('[API /auth] Error:', error);
     return NextResponse.json(
       { success: false, error: "Error al iniciar sesión" },
       { status: 500 }

@@ -84,6 +84,11 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html: `
+              // SERVER URL for native apps (APK/iOS)
+              // This is replaced during build with the actual server URL
+              window.__CYJ_SERVER_URL__ = "${process.env.NEXT_PUBLIC_SERVER_URL || ''}";
+              console.log('[CyJ] Server URL:', window.__CYJ_SERVER_URL__ || '(same-origin)');
+
               if ('serviceWorker' in navigator) {
                 window.addEventListener('load', function() {
                   navigator.serviceWorker.register('/sw.js').then(function(reg) {
