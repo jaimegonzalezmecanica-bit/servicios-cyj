@@ -122,15 +122,21 @@ function handleAuth(body: Record<string, unknown>): Response {
 function handleAlert(method: string, body: Record<string, unknown>): Response {
   const alerts = getLocal<Alert>(KEYS.alerts);
 
+  if (method === "GET") {
+    return jsonResponse({ alerts });
+  }
+
   if (method === "POST") {
     const now = new Date();
+    const category = String(body.category || "Otro");
+    const isSOS = category === "sos";
     const newAlert: Alert = {
       id: `a${Date.now()}`,
-      category: String(body.category || "Otro"),
-      categoryIcon: getCatIcon(String(body.category)),
-      title: `${String(body.category || "Incidente")} reportado`,
+      category,
+      categoryIcon: isSOS ? "flag" : getCatIcon(category),
+      title: isSOS ? `ALERTA SOS - ${String(body.description || "Emergencia").split(" - ")[1]?.split(" (")[0]?.trim() || "Residente"}` : `${category} reportado`,
       description: String(body.description || ""),
-      time: `hace un momento`,
+      time: isSOS ? new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }) : `hace un momento`,
       location: String(body.location || "No especificada"),
       status: "activa",
       priority: (body.priority as Alert["priority"]) || "medium",
@@ -142,6 +148,22 @@ function handleAlert(method: string, body: Record<string, unknown>): Response {
     };
     alerts.unshift(newAlert);
     setLocal(KEYS.alerts, alerts);
+
+    // Also save SOS flag in localStorage for cross-tab detection
+    if (isSOS) {
+      try {
+        localStorage.setItem("cyj_last_sos_id", newAlert.id);
+        localStorage.setItem("cyj_last_sos_data", JSON.stringify({
+          id: newAlert.id,
+          lat: newAlert.lat,
+          lng: newAlert.lng,
+          userName: newAlert.description?.split(" - ")[1]?.split(" (")[0]?.trim() || "Residente",
+          conjunto: newAlert.description?.match(/\(([^)]+)\)/)?.[1] || "",
+          time: newAlert.time,
+        }));
+      } catch { /* ignore */ }
+    }
+
     return jsonResponse({ success: true, alert: newAlert });
   }
 
@@ -383,6 +405,13 @@ export function enableOfflineMode(): void {
       case "alert":
       case "alerts":
         return handleAlert(method, body);
+      case "sos":
+        // SOS just creates an alert with category "sos"
+        return handleAlert("POST", {
+          ...body,
+          category: "sos",
+          priority: "critical",
+        });
       case "users":
         return handleUsers(method, body);
       case "towers":
@@ -393,13 +422,7 @@ export function enableOfflineMode(): void {
         return handleGuards(method, body);
       case "profile":
         return handleProfile(body);
-      case "sos":
-        // SOS just creates an alert
-        return handleAlert("POST", {
-          ...body,
-          category: "sos",
-          priority: "critical",
-        });
+
       default:
         // For unknown routes, try original fetch (in case server is available)
         try {

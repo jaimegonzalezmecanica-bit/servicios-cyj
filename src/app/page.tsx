@@ -166,6 +166,30 @@ function CategoryIcon({ name, size = 18 }: { name: string; size?: number }) {
   }
 }
 
+/* SOS sound: short alarm beep using Web Audio API */
+function playSOSSound(): void {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const playBeep = (startTime: number, freq: number, duration: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      osc.type = "square";
+      gain.gain.setValueAtTime(0.15, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+      osc.start(startTime);
+      osc.stop(startTime + duration);
+    };
+    const now = ctx.currentTime;
+    // SOS pattern: 3 short, 3 long, 3 short
+    for (let i = 0; i < 3; i++) { playBeep(now + i * 0.2, 880, 0.12); }
+    for (let i = 0; i < 3; i++) { playBeep(now + 0.8 + i * 0.35, 880, 0.25); }
+    for (let i = 0; i < 3; i++) { playBeep(now + 2.0 + i * 0.2, 880, 0.12); }
+  } catch { /* Audio not available */ }
+}
+
 function RoleIcon({ icon, size = 18, className = "" }: { icon: string; size?: number; className?: string }) {
   const props = { size, className };
   switch (icon) {
@@ -578,7 +602,7 @@ function SOSOverlay({ onCancel }: { onCancel: () => void }) {
    TOP BAR
    ═══════════════════════════════════════════════════════════ */
 
-function TopBar({ currentUser, currentRole, onNavigate }: { currentUser: UserProfile; currentRole: Role; onNavigate: (tab: TabId) => void }) {
+function TopBar({ currentUser, currentRole, onNavigate, alertCount }: { currentUser: UserProfile; currentRole: Role; onNavigate: (tab: TabId) => void; alertCount: number }) {
   return (
     <div className="bg-gradient-to-r from-[#0f4c81] to-[#0d3d66] px-4 pt-3 pb-3 flex-shrink-0">
       <div className="flex items-center justify-between text-white/80">
@@ -607,9 +631,11 @@ function TopBar({ currentUser, currentRole, onNavigate }: { currentUser: UserPro
           onClick={() => onNavigate("alerts")}
         >
           <Bell className="w-4 h-4 text-white" />
-          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 rounded-full text-[8px] text-white font-bold flex items-center justify-center">
-            3
-          </span>
+          {alertCount > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 bg-red-500 rounded-full text-[8px] text-white font-bold flex items-center justify-center px-1">
+              {alertCount > 99 ? "99+" : alertCount}
+            </span>
+          )}
         </button>
       </div>
     </div>
@@ -782,18 +808,28 @@ function HomeTab({
         </div>
         <div className="space-y-2">
           {recentAlerts.map((alert) => (
-            <div key={alert.id} className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 flex items-start gap-3">
+            <div key={alert.id} className={`rounded-xl p-4 shadow-sm border flex items-start gap-3 ${
+              alert.category === "sos" 
+                ? "bg-red-50 border-red-300 animate-pulse" 
+                : "bg-white border-slate-100"
+            }`}>
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                alert.status === "activa" ? "bg-red-100 text-red-600" : alert.status === "en_revision" ? "bg-amber-100 text-amber-600" : "bg-green-100 text-green-600"
+                alert.category === "sos" 
+                  ? "bg-red-600 text-white" 
+                  : alert.status === "activa" ? "bg-red-100 text-red-600" : alert.status === "en_revision" ? "bg-amber-100 text-amber-600" : "bg-green-100 text-green-600"
               }`}>
                 <CategoryIcon name={alert.categoryIcon} size={20} />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-2">
                   <h4 className="text-sm font-semibold text-slate-900 truncate">{alert.title}</h4>
-                  <Badge variant="outline" className={`text-[10px] px-2 py-0 border-0 ${getStatusColor(alert.status)}`}>
-                    {alert.status === "activa" ? "Activa" : alert.status === "en_revision" ? "Revisión" : "Resuelta"}
-                  </Badge>
+                  {alert.category === "sos" ? (
+                    <span className="text-[10px] px-2 py-0 border-0 bg-red-600 text-white rounded-full font-bold flex-shrink-0">SOS</span>
+                  ) : (
+                    <Badge variant="outline" className={`text-[10px] px-2 py-0 border-0 ${getStatusColor(alert.status)}`}>
+                      {alert.status === "activa" ? "Activa" : alert.status === "en_revision" ? "Revisión" : "Resuelta"}
+                    </Badge>
+                  )}
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
                   <Clock className="w-3 h-3" /> {alert.time}
@@ -2558,6 +2594,7 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState<TabId>("home");
   const [sosActive, setSosActive] = useState(false);
   const [sosAlert, setSosAlert] = useState<{ lat: number; lng: number; userName: string; conjunto: string; time: string } | null>(null);
+  const [incomingSOS, setIncomingSOS] = useState<{ lat: number; lng: number; userName: string; conjunto: string; time: string } | null>(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [showInstallGuide, setShowInstallGuide] = useState(false);
   const deferredPrompt = useRef<any>(null);
@@ -2588,20 +2625,130 @@ export default function HomePage() {
         });
       }
     } catch { /* ignore */ }
-    return towers;
+    // First launch: bake FIXED_POSITIONS into towers and save immediately
+    const initialized = towers.map((t: any) => {
+      try {
+        const saved = JSON.parse(localStorage.getItem("cyj_marker_positions") || "{}");
+        if (saved[t.id]) return { ...t, lat: saved[t.id].lat, lng: saved[t.id].lng };
+      } catch { /* ignore */ }
+      return t;
+    });
+    return initialized;
   });
 
   /* Load towers from API (offline-api intercepts and ensures positions) */
   useEffect(() => {
-    fetch("/api/towers")
-      .then((r) => r.json())
-      .then((data) => {
+    const loadTowers = async () => {
+      try {
+        const res = await fetch("/api/towers");
+        const data = await res.json();
         if (data.towers && Array.isArray(data.towers)) {
-          setTowersList(data.towers);
+          // Merge: API towers take priority, but always respect saved positions
+          const saved = JSON.parse(localStorage.getItem("cyj_marker_positions") || "{}");
+          const merged = data.towers.map((t: any) => {
+            if (saved[t.id] && typeof saved[t.id].lat === "number") {
+              return { ...t, lat: saved[t.id].lat, lng: saved[t.id].lng };
+            }
+            return t;
+          });
+          setTowersList(merged);
         }
-      })
-      .catch(() => { /* use initialized state */ });
+      } catch { /* use initialized state */ }
+    };
+    loadTowers();
   }, []);
+
+  /* ─── SOS ACTIVATION HANDLER ─── */
+  const handleSOSActivate = useCallback(() => {
+    if (!currentUser) return;
+    setSosActive(true);
+    const userName = currentUser.name || "Residente";
+    const conjunto = currentUser.conjunto || "";
+    const timeStr = new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
+
+    const setSOSData = (lat: number, lng: number) => {
+      const sosData = { lat, lng, userName, conjunto, time: timeStr };
+      setSosAlert(sosData);
+
+      // Persist SOS alert via API so other devices can see it
+      fetch("/api/alert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category: "sos",
+          description: `ALERTA SOS - ${userName}${conjunto ? ' (' + conjunto + ')' : ''} - Emergencia activada a las ${timeStr}`,
+          location: `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`,
+          isAnonymous: false,
+          priority: "critical",
+          lat,
+          lng,
+        }),
+      }).then((r) => r.json()).then((data) => {
+        if (data.success && data.alert) {
+          setAlerts((prev) => [data.alert, ...prev]);
+        }
+      }).catch(() => { /* silent */ });
+    };
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setSOSData(pos.coords.latitude, pos.coords.longitude),
+        () => setSOSData(-33.3298, -70.7630),
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    } else {
+      setSOSData(-33.3298, -70.7630);
+    }
+  }, [currentUser]);
+
+  /* ─── SOS POLLING: Check for new SOS alerts from other devices ─── */
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    let lastSOSId: string | null = null;
+
+    const pollSOS = () => {
+      fetch("/api/alerts")
+        .then((r) => r.json())
+        .then((data) => {
+          const alertList: Alert[] = data.alerts || data;
+          if (!Array.isArray(alertList)) return;
+          // Find the newest SOS alert that we didn't send
+          const sosAlerts = alertList.filter(
+            (a: Alert) => a.category === "sos" && a.status === "activa" && a.priority === "critical"
+          );
+          if (sosAlerts.length > 0) {
+            const newest = sosAlerts[0];
+            if (newest.id !== lastSOSId) {
+              lastSOSId = newest.id;
+              // Only show as incoming if it's NOT from current user (check by description)
+              const isOwnSOS = newest.description?.includes(currentUser?.name || "");
+              if (!isOwnSOS && !sosActive) {
+                setIncomingSOS({
+                  lat: newest.lat || -33.3298,
+                  lng: newest.lng || -70.7630,
+                  userName: newest.description?.split(" - ")[1]?.split(" (")[0]?.trim() || "Residente",
+                  conjunto: newest.description?.match(/\(([^)]+)\)/)?.[1] || "",
+                  time: newest.time,
+                });
+                // Play SOS alarm sound
+                playSOSSound();
+                // Also update alerts list
+                setAlerts(alertList);
+              } else {
+                setAlerts(alertList);
+              }
+            }
+          }
+        })
+        .catch(() => { /* silent */ });
+    };
+
+    // Poll every 5 seconds for new SOS alerts
+    const interval = setInterval(pollSOS, 5000);
+    // Initial check
+    pollSOS();
+    return () => clearInterval(interval);
+  }, [isLoggedIn, sosActive, currentUser]);
 
   /* PWA install prompt */
   useEffect(() => {
@@ -2680,42 +2827,9 @@ export default function HomePage() {
   const renderTabContent = () => {
     if (!role || !currentUser) return null;
     switch (activeTab) {
-      case "home": return <HomeTab currentUser={currentUser} currentRole={role} alerts={alerts} announcements={announcementsList} onNavigate={handleNavigate} onSOSActivate={() => {
-        setSosActive(true);
-        if (navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              setSosAlert({
-                lat: pos.coords.latitude,
-                lng: pos.coords.longitude,
-                userName: currentUser?.name || "Residente",
-                conjunto: currentUser?.conjunto || "",
-                time: new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
-              });
-            },
-            () => {
-              setSosAlert({
-                lat: -33.3298,
-                lng: -70.7630,
-                userName: currentUser?.name || "Residente",
-                conjunto: currentUser?.conjunto || "",
-                time: new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
-              });
-            },
-            { enableHighAccuracy: true, timeout: 10000 }
-          );
-        } else {
-          setSosAlert({
-            lat: -33.3298,
-            lng: -70.7630,
-            userName: currentUser?.name || "Residente",
-            conjunto: currentUser?.conjunto || "",
-            time: new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
-          });
-        }
-      }} />;
+      case "home": return <HomeTab currentUser={currentUser} currentRole={role} alerts={alerts} announcements={announcementsList} onNavigate={handleNavigate} onSOSActivate={handleSOSActivate} />;
       case "report": return <ReportTab onNavigate={handleNavigate} onReportSubmitted={handleReportSubmitted} />;
-      case "map": return <MapTab currentRole={role} towers={towersList} onTowersChange={setTowersList} sosAlert={sosAlert} />;
+      case "map": return <MapTab currentRole={role} towers={towersList} onTowersChange={setTowersList} sosAlert={sosAlert || incomingSOS} />;
       case "alerts": return <AlertsTab alerts={alerts} currentRole={role} onAlertsChange={setAlerts} />;
       case "roles": return <RolesTab currentUser={currentUser} currentRole={role} users={users} onUsersChange={setUsers} />;
       case "admin": return <AdminTab currentRole={role} alerts={alerts} announcements={announcementsList} onAnnouncementsChange={setAnnouncementsList} guards={guardsList} onGuardsChange={setGuardsList} towers={towersList} onTowersChange={setTowersList} currentUser={currentUser} />;
@@ -2733,7 +2847,7 @@ export default function HomePage() {
     <div className="min-h-screen bg-slate-100 flex justify-center">
       <div className="w-full max-w-md bg-slate-50 min-h-screen relative flex flex-col shadow-none md:shadow-2xl md:rounded-[2.5rem] md:border md:border-slate-200 overflow-hidden">
         {/* Top Bar */}
-        <TopBar currentUser={currentUser!} currentRole={role!} onNavigate={handleNavigate} />
+        <TopBar currentUser={currentUser!} currentRole={role!} onNavigate={handleNavigate} alertCount={alerts.filter((a) => a.status === "activa").length} />
 
         {/* Tab content */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide">
@@ -2760,8 +2874,40 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* SOS Overlay */}
+      {/* SOS Overlay (sender) */}
       {sosActive && <SOSOverlay onCancel={() => { setSosActive(false); setSosAlert(null); }} />}
+
+      {/* Incoming SOS Notification (receiver) */}
+      {incomingSOS && !sosActive && (
+        <div className="fixed inset-0 z-[99] flex items-start justify-center pt-4 pointer-events-none">
+          <div className="bg-red-600 text-white rounded-2xl px-5 py-4 shadow-2xl animate-slide-down pointer-events-auto max-w-sm mx-4">
+            <div className="flex items-start gap-3">
+              <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="w-7 h-7" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-bold text-base">ALERTA SOS RECIBIDA</h3>
+                <p className="text-red-100 text-xs mt-0.5">{incomingSOS.userName}{incomingSOS.conjunto ? ' - ' + incomingSOS.conjunto : ''}</p>
+                <p className="text-red-200 text-[10px] mt-1">{incomingSOS.time}</p>
+                <div className="flex gap-2 mt-3">
+                  <Button
+                    onClick={() => { setActiveTab("map"); setIncomingSOS(null); }}
+                    className="bg-white text-red-600 hover:bg-red-50 text-xs font-bold px-4 py-2 rounded-lg h-8"
+                  >
+                    <Map className="w-3.5 h-3.5 mr-1" /> Ver en Mapa
+                  </Button>
+                  <Button
+                    onClick={() => setIncomingSOS(null)}
+                    className="bg-white/20 text-white hover:bg-white/30 text-xs font-bold px-4 py-2 rounded-lg h-8"
+                  >
+                    Cerrar
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { mockAlerts } from "@/lib/mock-data";
+import { getAllAlerts } from "@/lib/store";
 
 export async function GET() {
+  const allAlerts = getAllAlerts();
   return NextResponse.json({
-    alerts: mockAlerts,
-    total: mockAlerts.length,
+    alerts: allAlerts,
+    total: allAlerts.length,
   });
 }

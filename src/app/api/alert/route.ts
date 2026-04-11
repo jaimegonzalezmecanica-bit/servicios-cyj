@@ -5,7 +5,7 @@ import { reportCategories } from "@/lib/mock-data";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { category, description, location, isAnonymous, priority, photo } = body;
+    const { category, description, location, isAnonymous, priority, photo, lat, lng } = body;
 
     if (!category || !description) {
       return NextResponse.json(
@@ -14,23 +14,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const isSOS = category === "sos";
     // Find category icon from reportCategories
     const catData = reportCategories.find((c) => c.id === category);
 
     const newAlert = {
       id: String(Date.now()),
-      category: catData?.label || category,
-      categoryIcon: catData?.icon || "flag",
-      title: description.substring(0, 50) + (description.length > 50 ? "..." : ""),
+      category: isSOS ? "sos" : (catData?.label || category),
+      categoryIcon: isSOS ? "flag" : (catData?.icon || "flag"),
+      title: isSOS
+        ? `ALERTA SOS - ${description.split(" - ")[1]?.split(" (")[0]?.trim() || "Residente"}`
+        : (description.substring(0, 50) + (description.length > 50 ? "..." : "")),
       description,
-      time: "hace un momento",
+      time: isSOS
+        ? new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })
+        : "hace un momento",
       location: location || "Av. La Montaña Norte 3650, Condominio Laguna Norte, Lampa, Chile",
       status: "activa" as const,
       priority: (priority || "medium") as "low" | "medium" | "high" | "critical",
       comments: 0,
       isAnonymous: isAnonymous || false,
-      lat: -33.3276,
-      lng: -70.7630,
+      lat: typeof lat === "number" ? lat : -33.3276,
+      lng: typeof lng === "number" ? lng : -70.7630,
       photo: photo || null,
     };
 
