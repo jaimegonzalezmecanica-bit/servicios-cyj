@@ -311,17 +311,19 @@ export interface Conjunto {
   units?: number;
   floors?: number;
   status: "operativo" | "mantención";
+  lat?: number;
+  lng?: number;
 }
 
 export const conjuntos: Conjunto[] = [
-  { id: "flamencos", name: "Flamencos", type: "casas", status: "operativo" },
-  { id: "faisanes", name: "Faisanes", type: "casas", status: "operativo" },
-  { id: "garzas", name: "Garzas", type: "casas", status: "operativo" },
-  { id: "gaviotas", name: "Gaviotas", type: "casas", status: "operativo" },
-  { id: "becacinas", name: "Becacinas", type: "casas", status: "operativo" },
-  { id: "bandurrias", name: "Bandurrias", type: "casas", status: "operativo" },
-  { id: "albatros", name: "Albatros", type: "casas", status: "operativo" },
-  { id: "canquen", name: "Canquén", type: "torres", towersCount: 2, status: "operativo" },
+  { id: "flamencos",  name: "Flamencos",  type: "casas",  status: "operativo", lat: -33.3264, lng: -70.7642 },
+  { id: "faisanes",   name: "Faisanes",   type: "casas",  status: "operativo", lat: -33.3258, lng: -70.7618 },
+  { id: "garzas",     name: "Garzas",     type: "casas",  status: "operativo", lat: -33.3262, lng: -70.7628 },
+  { id: "gaviotas",   name: "Gaviotas",   type: "casas",  status: "operativo", lat: -33.3274, lng: -70.7638 },
+  { id: "becacinas",  name: "Becacinas",  type: "casas",  status: "operativo", lat: -33.3278, lng: -70.7625 },
+  { id: "bandurrias", name: "Bandurrias", type: "casas",  status: "operativo", lat: -33.3285, lng: -70.7635 },
+  { id: "albatros",   name: "Albatros",   type: "casas",  status: "operativo", lat: -33.3288, lng: -70.7618 },
+  { id: "canquen",    name: "Canquén",    type: "torres", towersCount: 2, status: "operativo", lat: -33.3294, lng: -70.7630 },
 ];
 
 // Backward compatibility alias

@@ -10,7 +10,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, name, type, houses, towersCount, units, floors, status } = body;
+    const { id, name, type, houses, towersCount, units, floors, status, lat, lng } = body;
 
     if (!id || !name || !type) {
       return NextResponse.json(
@@ -47,6 +47,8 @@ export async function POST(request: NextRequest) {
     if (towersCount !== undefined && towersCount !== "") newConjunto.towersCount = Number(towersCount);
     if (units !== undefined && units !== "") newConjunto.units = Number(units);
     if (floors !== undefined && floors !== "") newConjunto.floors = Number(floors);
+    if (lat !== undefined && lat !== "") newConjunto.lat = Number(lat);
+    if (lng !== undefined && lng !== "") newConjunto.lng = Number(lng);
 
     addTower(newConjunto as any);
 
@@ -84,6 +86,12 @@ export async function PUT(request: NextRequest) {
 
     if (updates.floors !== undefined && (updates.floors === "" || updates.floors === null)) delete updates.floors;
     else if (updates.floors !== undefined) updates.floors = Number(updates.floors);
+
+    if (updates.lat !== undefined && (updates.lat === "" || updates.lat === null)) delete updates.lat;
+    else if (updates.lat !== undefined) updates.lat = Number(updates.lat);
+
+    if (updates.lng !== undefined && (updates.lng === "" || updates.lng === null)) delete updates.lng;
+    else if (updates.lng !== undefined) updates.lng = Number(updates.lng);
 
     const validStatuses = ["operativo", "mantención"];
     if (updates.status && !validStatuses.includes(updates.status)) {

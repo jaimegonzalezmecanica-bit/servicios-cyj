@@ -13,6 +13,18 @@ import type { IncidentMarker } from "@/lib/mock-data";
 const MAP_CENTER: L.LatLngExpression = [-33.3273, -70.7628];
 const MAP_ZOOM = 17;
 
+/* Default positions when condominios don't have lat/lng yet */
+const DEFAULT_POSITIONS: Record<string, L.LatLngExpression> = {
+  faisanes:   [-33.3258, -70.7618],
+  garzas:     [-33.3262, -70.7628],
+  flamencos:  [-33.3264, -70.7642],
+  gaviotas:   [-33.3274, -70.7638],
+  becacinas:  [-33.3278, -70.7625],
+  bandurrias: [-33.3285, -70.7635],
+  albatros:   [-33.3288, -70.7618],
+  canquen:    [-33.3294, -70.7630],
+};
+
 /* Incident positions spread around the condominium grounds */
 const INCIDENT_POSITIONS: Record<string, L.LatLngExpression> = {
   m1: [-33.3265, -70.7613],
@@ -34,15 +46,34 @@ function getSeverityColor(severity: string): string {
   }
 }
 
+export interface CondominioMapData {
+  id: string;
+  name: string;
+  type: string;
+  lat?: number;
+  lng?: number;
+}
+
 interface MapViewProps {
   incidents: IncidentMarker[];
   filter: string;
   onSelectMarker: (marker: IncidentMarker) => void;
+  condominios?: CondominioMapData[];
+  editMode?: boolean;
+  onPositionChange?: (id: string, lat: number, lng: number) => void;
 }
 
-export default function MapView({ incidents, filter, onSelectMarker }: MapViewProps) {
+export default function MapView({
+  incidents,
+  filter,
+  onSelectMarker,
+  condominios = [],
+  editMode = false,
+  onPositionChange,
+}: MapViewProps) {
   const mapRef = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const condominioMarkersRef = useRef<Map<string, L.Marker>>(new Map());
 
   /* Filter incidents */
   const filteredIncidents = (() => {
@@ -69,33 +100,6 @@ export default function MapView({ incidents, filter, onSelectMarker }: MapViewPr
       attribution: '&copy; <a href="https://openstreetmap.org">OpenStreetMap</a>',
       maxZoom: 19,
     }).addTo(map);
-
-    /* Condominium markers (8 micro-condominios) - positions from real site plan */
-    const condominios = [
-      { name: "Faisanes",   pos: [-33.3258, -70.7618] as L.LatLngExpression, type: "casas" },
-      { name: "Garzas",     pos: [-33.3262, -70.7628] as L.LatLngExpression, type: "casas" },
-      { name: "Flamencos",  pos: [-33.3264, -70.7642] as L.LatLngExpression, type: "casas" },
-      { name: "Gaviotas",   pos: [-33.3274, -70.7638] as L.LatLngExpression, type: "casas" },
-      { name: "Becacinas",  pos: [-33.3278, -70.7625] as L.LatLngExpression, type: "casas" },
-      { name: "Bandurrias", pos: [-33.3285, -70.7635] as L.LatLngExpression, type: "casas" },
-      { name: "Albatros",   pos: [-33.3288, -70.7618] as L.LatLngExpression, type: "casas" },
-      { name: "Canquén",    pos: [-33.3294, -70.7630] as L.LatLngExpression, type: "deptos" },
-    ];
-
-    condominios.forEach(({ name, pos, type }) => {
-      const bg = type === "deptos" ? "#1e40af" : "#047857";
-      const label = type === "deptos" ? "Depto" : "Casas";
-      const cIcon = L.divIcon({
-        className: "",
-        html: `<div style="background:${bg};color:white;border-radius:10px;padding:3px 8px;font-size:11px;font-weight:700;border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3);white-space:nowrap;display:flex;align-items:center;gap:4px;">${name}</div>`,
-        iconSize: [100, 24],
-        iconAnchor: [50, 12],
-      });
-
-      L.marker(pos, { icon: cIcon })
-        .addTo(map)
-        .bindPopup(`<strong>${name}</strong><br>${label}<br>Condominio Laguna Norte<br>Av. La Montaña Norte 3650`);
-    });
 
     /* Condominium perimeter (approximate geofence for Laguna Norte) */
     const perimeter = [
@@ -188,6 +192,72 @@ export default function MapView({ incidents, filter, onSelectMarker }: MapViewPr
       mapRef.current = null;
     };
   }, []);
+
+  /* Render / re-render condominio markers */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    /* Remove old condominio markers */
+    condominioMarkersRef.current.forEach((marker) => map.removeLayer(marker));
+    condominioMarkersRef.current.clear();
+
+    /* Add condominio markers from data */
+    condominios.forEach((c) => {
+      const pos = (c.lat && c.lng)
+        ? [c.lat, c.lng] as L.LatLngExpression
+        : (DEFAULT_POSITIONS[c.id] || MAP_CENTER);
+
+      const isDeptos = c.type === "torres" || c.type === "deptos";
+      const bg = isDeptos ? "#1e40af" : "#047857";
+      const label = isDeptos ? "Depto" : "Casas";
+
+      const cIcon = L.divIcon({
+        className: "",
+        html: `<div style="
+          background:${editMode ? "#dc2626" : bg};
+          color: white;
+          border-radius:10px;
+          padding:3px 8px;
+          font-size:11px;
+          font-weight:700;
+          border:2px solid ${editMode ? "#fca5a5" : "white"};
+          box-shadow:0 2px 8px rgba(0,0,0,0.3);
+          white-space:nowrap;
+          display:flex;
+          align-items:center;
+          gap:4px;
+          ${editMode ? "cursor:grab;animation:pulse 1.5s infinite;" : ""}
+        ">${editMode ? "&#x270B; " : ""}${c.name}</div>`,
+        iconSize: [editMode ? 120 : 100, 24],
+        iconAnchor: [editMode ? 60 : 50, 12],
+      });
+
+      const marker = L.marker(pos, {
+        icon: cIcon,
+        draggable: editMode,
+        autoPan: editMode,
+      });
+
+      if (editMode && onPositionChange) {
+        marker.on("dragstart", () => {
+          (marker.getElement() as HTMLElement)?.style.setProperty("opacity", "0.7");
+        });
+
+        marker.on("dragend", () => {
+          const newPos = marker.getLatLng();
+          (marker.getElement() as HTMLElement)?.style.setProperty("opacity", "1");
+          onPositionChange(c.id, newPos.lat, newPos.lng);
+        });
+      }
+
+      marker.addTo(map).bindPopup(
+        `<strong>${c.name}</strong><br>${label}<br>Condominio Laguna Norte<br>Av. La Montaña Norte 3650`
+      );
+
+      condominioMarkersRef.current.set(c.id, marker);
+    });
+  }, [condominios, editMode, onPositionChange]);
 
   /* Update incident markers when filter changes */
   useEffect(() => {

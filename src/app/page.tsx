@@ -36,6 +36,7 @@ import {
   Camera,
   Send,
   CheckCircle2,
+  Check,
   Clock,
   MessageSquare,
   Settings,
@@ -970,46 +971,122 @@ function ReportTab({
    TAB 3: MAP (Leaflet)
    ═══════════════════════════════════════════════════════════ */
 
-function MapTab() {
+function MapTab({ currentRole, towers, onTowersChange }: { currentRole: any; towers: any[]; onTowersChange: (t: any[]) => void }) {
   const [selectedFilter, setSelectedFilter] = useState("Todos");
   const [selectedMarker, setSelectedMarker] = useState<IncidentMarker | null>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedToast, setSavedToast] = useState(false);
 
   const handleSelectMarker = useCallback((marker: IncidentMarker) => {
     setSelectedMarker(marker);
   }, []);
 
+  const canEdit = currentRole?.permissions?.canViewStats || currentRole?.role === "super_admin" || currentRole?.role === "admin";
+
+  const handlePositionChange = useCallback(async (id: string, lat: number, lng: number) => {
+    /* Update local state immediately for smooth UX */
+    onTowersChange(towers.map((t: any) => (t.id === id ? { ...t, lat, lng } : t)));
+
+    /* Persist to API */
+    try {
+      setSaving(true);
+      await fetch("/api/towers", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ towerId: id, lat, lng }),
+      });
+      setSavedToast(true);
+      setTimeout(() => setSavedToast(false), 2500);
+    } catch {
+      // silent fail — local state is already updated
+    } finally {
+      setSaving(false);
+    }
+  }, [towers, onTowersChange]);
+
   return (
     <div className="space-y-0 pb-4 animate-fade-in">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-slate-900">Mapa de Incidentes</h1>
-        <button className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center shadow-sm"><Filter className="w-5 h-5 text-slate-600" /></button>
+        <div className="flex items-center gap-2">
+          {canEdit && (
+            <button
+              onClick={() => setEditMode(!editMode)}
+              className={`px-3 py-2 rounded-xl text-xs font-bold border-2 transition-all active:scale-95 flex items-center gap-1.5 ${
+                editMode
+                  ? "bg-red-50 border-red-300 text-red-600"
+                  : "bg-white border-slate-200 text-slate-600"
+              }`}
+            >
+              {editMode ? (
+                <>
+                  <Check className="w-3.5 h-3.5" /> Terminar
+                </>
+              ) : (
+                <>
+                  <Pencil className="w-3.5 h-3.5" /> Editar ubicaciones
+                </>
+              )}
+            </button>
+          )}
+          <button className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center shadow-sm"><Filter className="w-5 h-5 text-slate-600" /></button>
+        </div>
       </div>
+      {editMode && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mt-2 flex items-center gap-2">
+          <Pencil className="w-4 h-4 text-amber-600 flex-shrink-0" />
+          <p className="text-[11px] text-amber-800 font-medium">Modo edición activo — Arrastra los marcadores rojos para reposicionar cada condominio. Los cambios se guardan automáticamente.</p>
+        </div>
+      )}
       <div className="relative h-[380px] rounded-2xl overflow-hidden shadow-sm border border-slate-200 mt-3">
         <MapView
           incidents={incidentMarkers}
           filter={selectedFilter}
           onSelectMarker={handleSelectMarker}
+          condominios={towers.map((t: any) => ({ id: t.id, name: t.name, type: t.type, lat: t.lat, lng: t.lng }))}
+          editMode={editMode}
+          onPositionChange={handlePositionChange}
         />
         {/* Legend overlay */}
-        <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm rounded-xl p-2.5 shadow-lg space-y-1.5 z-[1000]">
-          <p className="text-[10px] font-semibold text-slate-700">Leyenda</p>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-[#0f4c81] border border-white shadow" />
-            <span className="text-[10px] text-slate-500">Torre</span>
+        {!editMode && (
+          <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm rounded-xl p-2.5 shadow-lg space-y-1.5 z-[1000]">
+            <p className="text-[10px] font-semibold text-slate-700">Leyenda</p>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded bg-emerald-600 border border-white shadow" />
+              <span className="text-[10px] text-slate-500">Casas</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded bg-blue-700 border border-white shadow" />
+              <span className="text-[10px] text-slate-500">Deptos</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded-full bg-red-600" />
+              <span className="text-[10px] text-slate-500">Crítico</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded-full bg-orange-500" />
+              <span className="text-[10px] text-slate-500">Advertencia</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded-full bg-blue-500" />
+              <span className="text-[10px] text-slate-500">Info</span>
+            </div>
           </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-red-600" />
-            <span className="text-[10px] text-slate-500">Crítico</span>
+        )}
+        {/* Saving toast */}
+        {saving && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-sm rounded-xl px-4 py-2 shadow-lg z-[1000] flex items-center gap-2">
+            <div className="w-4 h-4 border-2 border-[#0f4c81] border-t-transparent rounded-full animate-spin" />
+            <span className="text-[11px] font-semibold text-slate-700">Guardando...</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-orange-500" />
-            <span className="text-[10px] text-slate-500">Advertencia</span>
+        )}
+        {savedToast && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-green-50 border border-green-200 rounded-xl px-4 py-2 shadow-lg z-[1000] flex items-center gap-2 animate-fade-in">
+            <Check className="w-4 h-4 text-green-600" />
+            <span className="text-[11px] font-semibold text-green-700">Ubicación guardada</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-blue-500" />
-            <span className="text-[10px] text-slate-500">Info</span>
-          </div>
-        </div>
+        )}
       </div>
       <div className="flex gap-2 overflow-x-auto py-3 scrollbar-hide">
         {MAP_FILTERS.map((f) => (
@@ -2459,7 +2536,7 @@ export default function HomePage() {
     switch (activeTab) {
       case "home": return <HomeTab currentUser={currentUser} currentRole={role} alerts={alerts} announcements={announcementsList} onNavigate={handleNavigate} onSOSActivate={() => setSosActive(true)} />;
       case "report": return <ReportTab onNavigate={handleNavigate} onReportSubmitted={handleReportSubmitted} />;
-      case "map": return <MapTab />;
+      case "map": return <MapTab currentRole={role} towers={towersList} onTowersChange={setTowersList} />;
       case "alerts": return <AlertsTab alerts={alerts} currentRole={role} onAlertsChange={setAlerts} />;
       case "roles": return <RolesTab currentUser={currentUser} currentRole={role} users={users} onUsersChange={setUsers} />;
       case "admin": return <AdminTab currentRole={role} alerts={alerts} announcements={announcementsList} onAnnouncementsChange={setAnnouncementsList} guards={guardsList} onGuardsChange={setGuardsList} towers={towersList} onTowersChange={setTowersList} currentUser={currentUser} />;
