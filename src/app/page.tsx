@@ -57,6 +57,7 @@ import {
   Search,
   Lock,
   Building2,
+  Pencil,
   AlertCircle,
   Megaphone,
   Calendar,
@@ -1543,6 +1544,8 @@ function AdminTab({
   onAnnouncementsChange,
   guards,
   onGuardsChange,
+  towers,
+  onTowersChange,
   currentUser,
 }: {
   currentRole: Role;
@@ -1551,6 +1554,8 @@ function AdminTab({
   onAnnouncementsChange: (a: Announcement[]) => void;
   guards: GuardOnDuty[];
   onGuardsChange: (g: GuardOnDuty[]) => void;
+  towers: Tower[];
+  onTowersChange: (t: Tower[]) => void;
   currentUser: UserProfile;
 }) {
   const { toast } = useToast();
@@ -1571,6 +1576,16 @@ function AdminTab({
   const [shiftZone, setShiftZone] = useState("Torres A-B");
   const [shiftPhone, setShiftPhone] = useState("");
   const [shiftSubmitting, setShiftSubmitting] = useState(false);
+
+  /* ─── Tower management state ─── */
+  const [showTowerForm, setShowTowerForm] = useState(false);
+  const [editingTower, setEditingTower] = useState<Tower | null>(null);
+  const [towerId, setTowerId] = useState("");
+  const [towerName, setTowerName] = useState("");
+  const [towerUnits, setTowerUnits] = useState("");
+  const [towerFloors, setTowerFloors] = useState("");
+  const [towerStatus, setTowerStatus] = useState<"operativa" | "mantención">("operativa");
+  const [towerSubmitting, setTowerSubmitting] = useState(false);
 
   /* ─── Create Announcement ─── */
   const handleCreateAnnouncement = async () => {
@@ -1645,6 +1660,91 @@ function AdminTab({
     }
   };
 
+  /* ─── Tower CRUD ─── */
+  const openCreateTower = () => {
+    setEditingTower(null);
+    setTowerId(""); setTowerName(""); setTowerUnits(""); setTowerFloors(""); setTowerStatus("operativa");
+    setShowTowerForm(true);
+  };
+
+  const openEditTower = (t: Tower) => {
+    setEditingTower(t);
+    setTowerId(t.id); setTowerName(t.name); setTowerUnits(String(t.units)); setTowerFloors(String(t.floors)); setTowerStatus(t.status);
+    setShowTowerForm(true);
+  };
+
+  const handleSaveTower = async () => {
+    if (!towerId.trim()) { toast({ title: "ID requerido", description: "Ej: G, H, I", variant: "destructive" }); return; }
+    if (!towerName.trim()) { toast({ title: "Nombre requerido", description: "Ej: Torre G", variant: "destructive" }); return; }
+    if (!towerUnits || Number(towerUnits) < 1) { toast({ title: "Unidades inválidas", variant: "destructive" }); return; }
+    if (!towerFloors || Number(towerFloors) < 1) { toast({ title: "Pisos inválidos", variant: "destructive" }); return; }
+
+    // Check for duplicate ID (except when editing same tower)
+    if (!editingTower && towers.some((t) => t.id === towerId.trim().toUpperCase())) {
+      toast({ title: "ID duplicado", description: "Ya existe una torre con ese ID.", variant: "destructive" });
+      return;
+    }
+
+    setTowerSubmitting(true);
+    try {
+      if (editingTower) {
+        // UPDATE
+        const res = await fetch("/api/towers", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ towerId: editingTower.id, id: towerId.trim().toUpperCase(), name: towerName.trim(), units: Number(towerUnits), floors: Number(towerFloors), status: towerStatus }),
+        });
+        const data = await res.json();
+        if (data.success && data.tower) {
+          onTowersChange(towers.map((t) => (t.id === editingTower.id ? data.tower : t)));
+          toast({ title: "Torre actualizada", description: `${data.tower.name} ha sido actualizada.` });
+          setShowTowerForm(false);
+        } else {
+          toast({ title: "Error", description: data.error || "No se pudo actualizar la torre.", variant: "destructive" });
+        }
+      } else {
+        // CREATE
+        const res = await fetch("/api/towers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: towerId.trim().toUpperCase(), name: towerName.trim(), units: Number(towerUnits), floors: Number(towerFloors), status: towerStatus }),
+        });
+        const data = await res.json();
+        if (data.success && data.tower) {
+          onTowersChange([...towers, data.tower]);
+          toast({ title: "Torre creada", description: `${data.tower.name} ha sido agregada.` });
+          setTowerId(""); setTowerName(""); setTowerUnits(""); setTowerFloors(""); setTowerStatus("operativa");
+          setShowTowerForm(false);
+        } else {
+          toast({ title: "Error", description: data.error || "No se pudo crear la torre.", variant: "destructive" });
+        }
+      }
+    } catch {
+      toast({ title: "Error", description: "Error de conexión.", variant: "destructive" });
+    } finally {
+      setTowerSubmitting(false);
+    }
+  };
+
+  const handleDeleteTower = async (t: Tower) => {
+    try {
+      const res = await fetch("/api/towers", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ towerId: t.id }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        onTowersChange(towers.filter((tw) => tw.id !== t.id));
+        toast({ title: "Torre eliminada", description: `${t.name} ha sido eliminada.` });
+      } else {
+        toast({ title: "Error", description: data.error || "No se pudo eliminar.", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Error", description: "Error de conexión.", variant: "destructive" });
+    }
+  };
+
   return (
     <div className="space-y-5 pb-4 animate-fade-in">
       <div>
@@ -1675,23 +1775,44 @@ function AdminTab({
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-slate-900">Torres</h2>
-            <span className="text-xs text-slate-400">{communityStats.towers} torres • {communityStats.totalUnits} unidades</span>
+            <Button size="sm" className="bg-[#0f4c81] hover:bg-[#0a3a63] text-white rounded-lg text-xs h-7" onClick={openCreateTower}>
+              <Plus className="w-3 h-3 mr-1" /> Agregar
+            </Button>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            {towers.map((t) => (
-              <div key={t.id} className="bg-white rounded-xl border border-slate-200 p-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-slate-900">{t.name}</h3>
-                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${t.status === "operativa" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
-                    {t.status === "operativa" ? "Operativa" : "Mantención"}
-                  </span>
+          {towers.length === 0 ? (
+            <div className="flex flex-col items-center py-8 gap-2">
+              <Building2 className="w-8 h-8 text-slate-300" />
+              <p className="text-sm text-slate-400">No hay torres</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {towers.map((t) => (
+                <div key={t.id} className="bg-white rounded-xl border border-slate-200 p-3 flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${t.status === "operativa" ? "bg-blue-50 text-blue-600" : "bg-amber-50 text-amber-600"}`}>
+                    <Building2 className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-slate-900">{t.name}</p>
+                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${t.status === "operativa" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                        {t.status === "operativa" ? "Operativa" : "Mantención"}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">{t.units} unidades • {t.floors} pisos</p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => openEditTower(t)} className="w-7 h-7 rounded-lg bg-slate-50 flex items-center justify-center active:bg-slate-100">
+                      <Pencil className="w-3.5 h-3.5 text-slate-500" />
+                    </button>
+                    <button onClick={() => handleDeleteTower(t)} className="w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center active:bg-red-100">
+                      <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                    </button>
+                  </div>
                 </div>
-                <div className="text-xs text-slate-500">
-                  <p>{t.units} unidades • {t.floors} pisos</p>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+              <p className="text-[10px] text-slate-400 text-center pt-1">{towers.length} torres • {towers.reduce((sum, t) => sum + t.units, 0)} unidades totales</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -1894,6 +2015,57 @@ function AdminTab({
                 {shiftSubmitting ? "Asignando..." : "Asignar Turno"}
               </Button>
               <Button variant="outline" onClick={() => setShowAssignShift(false)} className="w-full rounded-xl">Cancelar</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ TOWER FORM MODAL ═══ */}
+      {showTowerForm && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowTowerForm(false)} />
+          <div className="relative bg-white rounded-t-3xl w-full max-w-md p-6 pb-8 space-y-4 animate-slide-up max-h-[85vh] overflow-y-auto">
+            <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto" />
+            <h3 className="text-lg font-bold text-slate-900">{editingTower ? "Editar Torre" : "Nueva Torre"}</h3>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-slate-600">ID de Torre *</Label>
+                  <Input value={towerId} onChange={(e) => setTowerId(e.target.value.toUpperCase())} placeholder="Ej: G" className="rounded-xl h-11" disabled={!!editingTower} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-slate-600">Nombre *</Label>
+                  <Input value={towerName} onChange={(e) => setTowerName(e.target.value)} placeholder="Ej: Torre G" className="rounded-xl h-11" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-slate-600">Unidades *</Label>
+                  <Input type="number" min="1" value={towerUnits} onChange={(e) => setTowerUnits(e.target.value)} placeholder="Ej: 60" className="rounded-xl h-11" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-slate-600">Pisos *</Label>
+                  <Input type="number" min="1" value={towerFloors} onChange={(e) => setTowerFloors(e.target.value)} placeholder="Ej: 10" className="rounded-xl h-11" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-600">Estado</Label>
+                <Select value={towerStatus} onValueChange={(v) => setTowerStatus(v as "operativa" | "mantención")}>
+                  <SelectTrigger className="w-full rounded-xl h-11">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="operativa">Operativa</SelectItem>
+                    <SelectItem value="mantención">Mantención</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Button onClick={handleSaveTower} disabled={towerSubmitting} className="w-full bg-[#0f4c81] hover:bg-[#0a3a63] text-white rounded-xl h-11">
+                {towerSubmitting ? "Guardando..." : editingTower ? "Guardar Cambios" : "Crear Torre"}
+              </Button>
+              <Button variant="outline" onClick={() => setShowTowerForm(false)} className="w-full rounded-xl">Cancelar</Button>
             </div>
           </div>
         </div>
@@ -2152,6 +2324,9 @@ export default function HomePage() {
   /* ─── STATEFUL GUARDS ─── */
   const [guardsList, setGuardsList] = useState<GuardOnDuty[]>(mockGuards);
 
+  /* ─── STATEFUL TOWERS ─── */
+  const [towersList, setTowersList] = useState<Tower[]>(towers);
+
   /* PWA install prompt */
   useEffect(() => {
     const dismissed = localStorage.getItem(INSTALL_DISMISSED_KEY);
@@ -2234,7 +2409,7 @@ export default function HomePage() {
       case "map": return <MapTab />;
       case "alerts": return <AlertsTab alerts={alerts} currentRole={role} onAlertsChange={setAlerts} />;
       case "roles": return <RolesTab currentUser={currentUser} currentRole={role} users={users} onUsersChange={setUsers} />;
-      case "admin": return <AdminTab currentRole={role} alerts={alerts} announcements={announcementsList} onAnnouncementsChange={setAnnouncementsList} guards={guardsList} onGuardsChange={setGuardsList} currentUser={currentUser} />;
+      case "admin": return <AdminTab currentRole={role} alerts={alerts} announcements={announcementsList} onAnnouncementsChange={setAnnouncementsList} guards={guardsList} onGuardsChange={setGuardsList} towers={towersList} onTowersChange={setTowersList} currentUser={currentUser} />;
       case "profile": return <ProfileTab currentUser={currentUser} currentRole={role} onLogout={handleLogout} onSwitchRole={handleSwitchRole} />;
       default: return null;
     }

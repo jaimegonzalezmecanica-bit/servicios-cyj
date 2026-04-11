@@ -240,3 +240,29 @@ Stage Summary:
 - Alert status change now works for roles with canManageAlerts permission (Super Admin, Admin, Comité, Guardia)
 - Residents and visitors see alerts as read-only (no status buttons)
 - All 3 statuses supported: Activa, En revisión, Resuelta
+
+---
+Task ID: fix-tower-management
+Agent: main
+Task: Add full CRUD management for towers and condominiums
+
+Work Log:
+- Root cause: Towers were hardcoded static data with no edit/create/delete functionality
+- Added towers store to store.ts: addTower, updateTower, deleteTower, getAllTowers
+- Created /api/towers/route.ts with GET/POST/PUT/DELETE endpoints
+- Updated AdminTab: added towers and onTowersChange props
+- Added tower form modal with fields: ID, Name, Units, Floors, Status (Operativa/Mantención)
+- Added create tower: "Agregar" button opens form, validates unique ID, POSTs to API
+- Added edit tower: pencil icon on each tower opens pre-filled form, PUTs to API
+- Added delete tower: trash icon deletes with confirmation toast
+- Made towersList stateful in main component, passed to AdminTab
+- Added Pencil icon import from lucide-react
+- Dynamic total count: shows X torres • Y unidades totales
+- All CRUD operations tested via curl: POST, PUT, DELETE, GET all working
+
+Stage Summary:
+- Full tower CRUD: create, edit (name/units/floors/status), delete
+- Available to roles with canManageFacilities permission (Super Admin, Admin, Guardia)
+- Duplicate ID prevention on create
+- ID field disabled when editing (prevents changing tower ID)
+- ESLint passes with 0 errors
