@@ -44,6 +44,17 @@ export interface PerimeterPoint {
 
 export type PerimeterEditMode = "none" | "move" | "draw" | "vertices";
 
+export interface SOSAlertData {
+  id: string;
+  lat: number;
+  lng: number;
+  userName: string;
+  conjunto: string;
+  time: string;
+  description?: string;
+  priority?: string;
+}
+
 interface MapViewProps {
   condominios?: CondominioMapData[];
   editMode?: boolean;
@@ -54,6 +65,7 @@ interface MapViewProps {
   onPerimeterChange?: (points: PerimeterPoint[]) => void;
   perimeterEditMode?: PerimeterEditMode;
   sosAlert?: { lat: number; lng: number; userName: string; conjunto: string; time: string } | null;
+  activeSOSAlerts?: SOSAlertData[];
 }
 
 /* localStorage helpers */
@@ -106,6 +118,7 @@ export default function MapView({
   onPerimeterChange,
   perimeterEditMode = "none",
   sosAlert,
+  activeSOSAlerts = [],
 }: MapViewProps) {
   /* ─── Leaflet layer refs ─── */
   const mapRef = useRef<L.Map | null>(null);
@@ -115,6 +128,7 @@ export default function MapView({
   const sosMarkerRef = useRef<L.Marker | null>(null);
   const sosPulseRef = useRef<L.CircleMarker | null>(null);
   const sosPulse2Ref = useRef<L.CircleMarker | null>(null);
+  const sosPersistentMarkersRef = useRef<Map<string, L.Marker>>(new Map());
   const polygonRef = useRef<L.Polygon | null>(null);
   const vertexMarkersRef = useRef<Map<number, L.Marker>>(new Map());
 
@@ -385,12 +399,11 @@ export default function MapView({
     return () => { if (entranceMarkerRef.current) { map.removeLayer(entranceMarkerRef.current); entranceMarkerRef.current = null; } };
   }, [currentEntrance, editMode, onEntranceChange]);
 
-  /* ─── SOS ALERT MARKER ─── */
+  /* ─── SOS ALERT MARKER (live/temporary — from current session) ─── */
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
-    /* Cleanup previous SOS markers */
     if (sosMarkerRef.current) { map.removeLayer(sosMarkerRef.current); sosMarkerRef.current = null; }
     if (sosPulseRef.current) { map.removeLayer(sosPulseRef.current); sosPulseRef.current = null; }
     if (sosPulse2Ref.current) { map.removeLayer(sosPulse2Ref.current); sosPulse2Ref.current = null; }
@@ -400,29 +413,16 @@ export default function MapView({
     const { lat, lng, userName, conjunto, time } = sosAlert;
     const pos: L.LatLngExpression = [lat, lng];
 
-    /* Pulse ring 1 (outer, slower) */
     sosPulse2Ref.current = L.circleMarker(pos, {
-      radius: 35,
-      color: "#dc2626",
-      weight: 3,
-      opacity: 0.3,
-      fillColor: "#dc2626",
-      fillOpacity: 0.05,
-      interactive: false,
+      radius: 35, color: "#dc2626", weight: 3, opacity: 0.3,
+      fillColor: "#dc2626", fillOpacity: 0.05, interactive: false,
     }).addTo(map);
 
-    /* Pulse ring 2 (inner, faster) */
     sosPulseRef.current = L.circleMarker(pos, {
-      radius: 20,
-      color: "#dc2626",
-      weight: 3,
-      opacity: 0.5,
-      fillColor: "#dc2626",
-      fillOpacity: 0.1,
-      interactive: false,
+      radius: 20, color: "#dc2626", weight: 3, opacity: 0.5,
+      fillColor: "#dc2626", fillOpacity: 0.1, interactive: false,
     }).addTo(map);
 
-    /* SOS marker icon */
     const sosIcon = L.divIcon({
       className: "",
       html: `<div style="position:relative;text-align:center;">
@@ -434,11 +434,10 @@ export default function MapView({
         <div style="color:#dc2626;font-size:9px;font-weight:600;margin-top:1px;white-space:nowrap;">${time}</div>
         <style>@keyframes sos-pulse-ring{0%{transform:scale(0.8);opacity:1;}100%{transform:scale(2);opacity:0;}}</style>
       </div>`,
-      iconSize: [120, 80],
-      iconAnchor: [60, 25],
+      iconSize: [120, 80], iconAnchor: [60, 25],
     });
 
-    const marker = L.marker(pos, { icon: sosIcon, zIndexOffset: 3000, interactive: false });
+    const marker = L.marker(pos, { icon: sosIcon, zIndexOffset: 3000 });
     marker.addTo(map).bindPopup(
       `<div style="text-align:center;padding:4px;">
         <strong style="color:#dc2626;font-size:14px;">ALERTA SOS</strong><br>
@@ -449,7 +448,6 @@ export default function MapView({
     );
     sosMarkerRef.current = marker;
 
-    /* Auto-pan to SOS location */
     map.flyTo(pos, Math.max(map.getZoom(), 18), { duration: 1 });
 
     return () => {
@@ -458,6 +456,64 @@ export default function MapView({
       if (sosPulse2Ref.current) { map.removeLayer(sosPulse2Ref.current); sosPulse2Ref.current = null; }
     };
   }, [sosAlert]);
+
+  /* ─── PERSISTENT SOS ALERT MARKERS (from alerts list) ─── */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    // Remove old persistent SOS markers
+    sosPersistentMarkersRef.current.forEach((m) => map.removeLayer(m));
+    sosPersistentMarkersRef.current.clear();
+
+    // Don't duplicate if live sosAlert is active
+    const liveId = sosAlert ? `live-${sosAlert.lat}-${sosAlert.lng}` : null;
+
+    activeSOSAlerts.forEach((sos) => {
+      if (!sos.lat || !sos.lng) return;
+      // Skip if this is the same as the live SOS marker
+      if (liveId && sos.lat === sosAlert?.lat && sos.lng === sosAlert?.lng) return;
+
+      const pos: L.LatLngExpression = [sos.lat, sos.lng];
+      const isCritical = sos.priority === "critical";
+
+      const persistentIcon = L.divIcon({
+        className: "",
+        html: `<div style="position:relative;text-align:center;">
+          <div style="width:40px;height:40px;border-radius:50%;background:${isCritical ? 'rgba(220,38,38,0.2)' : 'rgba(245,158,11,0.2)'};border:3px solid ${isCritical ? '#dc2626' : '#f59e0b'};"></div>
+          <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:26px;height:26px;border-radius:50%;background:${isCritical ? '#dc2626' : '#f59e0b'};box-shadow:0 0 0 3px ${isCritical ? 'rgba(220,38,38,0.3)' : 'rgba(245,158,11,0.3)'},0 2px 8px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;">
+            <span style="color:white;font-size:9px;font-weight:900;letter-spacing:1px;">SOS</span>
+          </div>
+          <div style="margin-top:3px;background:${isCritical ? '#dc2626' : '#f59e0b'};color:white;border-radius:5px;padding:1px 6px;font-size:9px;font-weight:700;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.3);">${sos.userName}${sos.conjunto ? ' - ' + sos.conjunto : ''}</div>
+          <div style="color:#666;font-size:8px;font-weight:600;margin-top:1px;white-space:nowrap;">${sos.time}</div>
+        </div>`,
+        iconSize: [100, 70], iconAnchor: [50, 20],
+      });
+
+      const marker = L.marker(pos, { icon: persistentIcon, zIndexOffset: 2500 });
+      marker.addTo(map).bindPopup(
+        `<div style="text-align:center;padding:6px;min-width:180px;">
+          <strong style="color:#dc2626;font-size:14px;">ALERTA SOS</strong><br>
+          <div style="margin-top:4px;padding-top:4px;border-top:1px solid #eee;">
+            <b style="font-size:12px;">${sos.userName}</b><br>
+            ${sos.conjunto ? '<span style="color:#666;font-size:11px;">Conjunto: <b>' + sos.conjunto + '</b></span><br>' : ''}
+            <span style="color:#666;font-size:11px;">Hora: <b>${sos.time}</b></span><br>
+            <span style="color:#666;font-size:11px;">Coordenadas:</span><br>
+            <span style="font-size:10px;color:#888;">Lat: ${sos.lat.toFixed(6)}</span><br>
+            <span style="font-size:10px;color:#888;">Lng: ${sos.lng.toFixed(6)}</span>
+          </div>
+          ${sos.description ? '<div style="margin-top:4px;padding-top:4px;border-top:1px solid #eee;font-size:10px;color:#555;">' + sos.description + '</div>' : ''}
+        </div>`,
+        { maxWidth: 250 }
+      );
+      sosPersistentMarkersRef.current.set(sos.id, marker);
+    });
+
+    return () => {
+      sosPersistentMarkersRef.current.forEach((m) => map.removeLayer(m));
+      sosPersistentMarkersRef.current.clear();
+    };
+  }, [activeSOSAlerts, sosAlert]);
 
   /* ─── CONDOMINIO MARKERS ─── */
   useEffect(() => {
@@ -489,3 +545,5 @@ export default function MapView({
 
   return <div ref={containerRef} className="w-full h-full rounded-2xl" />;
 }
+
+export type { SOSAlertData };

@@ -1012,7 +1012,7 @@ export interface SOSData {
   time: string;
 }
 
-function MapTab({ currentRole, towers, onTowersChange, sosAlert }: { currentRole: any; towers: any[]; onTowersChange: (t: any[]) => void; sosAlert?: SOSData | null }) {
+function MapTab({ currentRole, towers, onTowersChange, sosAlert, activeSOSAlerts }: { currentRole: any; towers: any[]; onTowersChange: (t: any[]) => void; sosAlert?: SOSData | null; activeSOSAlerts?: any[] }) {
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedToast, setSavedToast] = useState(false);
@@ -1226,6 +1226,7 @@ function MapTab({ currentRole, towers, onTowersChange, sosAlert }: { currentRole
           onPerimeterChange={handlePerimeterChange}
           perimeterEditMode={perimeterMode}
           sosAlert={sosAlert}
+          activeSOSAlerts={activeSOSAlerts}
         />
         {saving && (
           <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-sm rounded-xl px-4 py-2 shadow-lg z-[1000] flex items-center gap-2">
@@ -1251,6 +1252,7 @@ function MapTab({ currentRole, towers, onTowersChange, sosAlert }: { currentRole
 function AlertsTab({ alerts, currentRole, onAlertsChange }: { alerts: Alert[]; currentRole?: Role; onAlertsChange: (alerts: Alert[]) => void }) {
   const [selectedFilter, setSelectedFilter] = useState("Todas");
   const [changingId, setChangingId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const canManage = currentRole?.permissions?.canManageAlerts === true;
   const filteredAlerts = selectedFilter === "Activas" ? alerts.filter((a) => a.status === "activa") : selectedFilter === "Resueltas" ? alerts.filter((a) => a.status === "resuelta") : selectedFilter === "Mías" ? alerts.filter((_, i) => i % 3 === 0) : alerts;
 
@@ -1297,28 +1299,86 @@ function AlertsTab({ alerts, currentRole, onAlertsChange }: { alerts: Alert[]; c
         </div>
       ) : (
         <div className="space-y-2">
-          {filteredAlerts.map((alert) => (
-            <div key={alert.id} className={`bg-white rounded-xl p-4 shadow-sm border-l-4 ${alert.status === "activa" ? "border-l-red-500" : alert.status === "en_revision" ? "border-l-amber-500" : "border-l-green-500"}`}>
-              <div className="flex items-start gap-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${alert.priority === "critical" ? "bg-red-100 text-red-600" : alert.priority === "high" ? "bg-orange-100 text-orange-600" : alert.priority === "medium" ? "bg-amber-100 text-amber-600" : "bg-blue-100 text-blue-600"}`}>
-                  <CategoryIcon name={alert.categoryIcon} size={20} />
+          {filteredAlerts.map((alert) => {
+            const isSOS = alert.category === "sos";
+            const isExpanded = expandedId === alert.id;
+            const sosUserName = isSOS ? (alert.description?.split(" - ")[1]?.split(" (")[0]?.trim() || "Residente") : null;
+            const sosConjunto = isSOS ? (alert.description?.match(/\(([^)]+)\)/)?.[1] || "") : null;
+
+            return (
+            <div key={alert.id} className={`rounded-xl p-4 shadow-sm border-l-4 transition-all ${isSOS ? "border-l-red-600 bg-red-50" : (alert.status === "activa" ? "border-l-red-500 bg-white" : alert.status === "en_revision" ? "border-l-amber-500 bg-white" : "border-l-green-500 bg-white")}`}>
+              <div
+                className="flex items-start gap-3 cursor-pointer active:opacity-80"
+                onClick={() => setExpandedId(isExpanded ? null : alert.id)}
+              >
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${isSOS ? "bg-red-600 text-white" : alert.priority === "critical" ? "bg-red-100 text-red-600" : alert.priority === "high" ? "bg-orange-100 text-orange-600" : alert.priority === "medium" ? "bg-amber-100 text-amber-600" : "bg-blue-100 text-blue-600"}`}>
+                  {isSOS ? <Flag className="w-5 h-5" /> : <CategoryIcon name={alert.categoryIcon} size={20} />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
-                    <h4 className="text-sm font-semibold text-slate-900 truncate">{alert.title}</h4>
-                    <Badge variant="outline" className={`text-[10px] px-2 py-0 border-0 flex-shrink-0 ${getStatusColor(alert.status)}`}>
-                      {alert.status === "activa" ? "Activa" : alert.status === "en_revision" ? "En revisión" : "Resuelta"}
-                    </Badge>
+                    <h4 className={`text-sm font-semibold truncate ${isSOS ? "text-red-700" : "text-slate-900"}`}>{alert.title}</h4>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {isSOS && (
+                        <span className="text-[9px] px-2 py-0 bg-red-600 text-white rounded-full font-bold">SOS</span>
+                      )}
+                      <Badge variant="outline" className={`text-[10px] px-2 py-0 border-0 ${getStatusColor(alert.status)}`}>
+                        {alert.status === "activa" ? "Activa" : alert.status === "en_revision" ? "Revisión" : "Resuelta"}
+                      </Badge>
+                    </div>
                   </div>
                   <p className="text-xs text-slate-500 mt-1 line-clamp-2">{alert.description}</p>
                   <div className="flex items-center gap-3 mt-2">
                     <span className="text-[11px] text-slate-400 flex items-center gap-1"><Clock className="w-3 h-3" /> {alert.time}</span>
-                    <span className="text-[11px] text-slate-400 flex items-center gap-1"><MapPin className="w-3 h-3" /> {alert.location.split(" - ")[0]}</span>
+                    <span className="text-[11px] text-slate-400 flex items-center gap-1"><MapPin className="w-3 h-3" /> {isSOS ? "Ver ubicación GPS" : alert.location.split(" - ")[0]}</span>
                     <span className="text-[11px] text-slate-400 flex items-center gap-1"><MessageSquare className="w-3 h-3" /> {alert.comments}</span>
+                    <ChevronRight className={`w-3 h-3 text-slate-400 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
                   </div>
-                  {alert.isAnonymous && <span className="text-[10px] text-slate-400 mt-1 flex items-center gap-1"><User className="w-3 h-3" /> Anónimo</span>}
+                </div>
+              </div>
+
+              {isExpanded && (
+                <div className="mt-3 pt-3 border-t border-slate-200 space-y-2 animate-fade-in">
+                  {isSOS ? (
+                    <>
+                      <div className="bg-red-100 rounded-lg p-3 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <User className="w-4 h-4 text-red-600" />
+                          <span className="text-xs font-bold text-red-700">Remitente: {sosUserName || "No identificado"}</span>
+                        </div>
+                        {sosConjunto && (
+                          <div className="flex items-center gap-2">
+                            <Building2 className="w-4 h-4 text-red-600" />
+                            <span className="text-xs font-semibold text-red-700">Conjunto: {sosConjunto}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-red-600" />
+                          <span className="text-xs font-semibold text-red-700">Hora activación: {alert.time}</span>
+                        </div>
+                      </div>
+                      {typeof alert.lat === "number" && typeof alert.lng === "number" && (
+                        <div className="bg-slate-50 rounded-lg p-3 space-y-1.5">
+                          <p className="text-[10px] font-bold text-slate-600 uppercase tracking-wide">Ubicación GPS</p>
+                          <p className="text-xs text-slate-700 font-mono">Lat: {alert.lat.toFixed(6)}</p>
+                          <p className="text-xs text-slate-700 font-mono">Lng: {alert.lng.toFixed(6)}</p>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-xs text-slate-600">{alert.description}</p>
+                      {alert.location && (
+                        <div className="flex items-center gap-1 text-[11px] text-slate-500">
+                          <MapPin className="w-3 h-3" />
+                          <span>{alert.location}</span>
+                        </div>
+                      )}
+                      {alert.isAnonymous && <span className="text-[10px] text-slate-400 flex items-center gap-1"><User className="w-3 h-3" /> Reportado de forma anónima</span>}
+                    </>
+                  )}
+
                   {canManage && (
-                    <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-slate-100">
+                    <div className="flex items-center gap-1.5 pt-2 border-t border-slate-100">
                       <span className="text-[10px] text-slate-400 mr-1">Cambiar estado:</span>
                       {statusOptions.map((opt) => (
                         <button
@@ -1337,9 +1397,10 @@ function AlertsTab({ alerts, currentRole, onAlertsChange }: { alerts: Alert[]; c
                     </div>
                   )}
                 </div>
-              </div>
+              )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -2824,12 +2885,28 @@ export default function HomePage() {
     setAlerts((prev) => [alert, ...prev]);
   }, []);
 
+  /* Compute active SOS alerts for persistent map markers */
+  const activeSOSAlerts = useMemo(() => {
+    return alerts
+      .filter((a) => a.category === "sos" && a.status === "activa" && typeof a.lat === "number" && typeof a.lng === "number")
+      .map((a) => ({
+        id: a.id,
+        lat: a.lat,
+        lng: a.lng,
+        userName: a.description?.split(" - ")[1]?.split(" (")[0]?.trim() || a.title.replace("ALERTA SOS - ", "") || "Residente",
+        conjunto: a.description?.match(/\(([^)]+)\)/)?.[1] || "",
+        time: a.time,
+        description: a.description,
+        priority: a.priority,
+      }));
+  }, [alerts]);
+
   const renderTabContent = () => {
     if (!role || !currentUser) return null;
     switch (activeTab) {
       case "home": return <HomeTab currentUser={currentUser} currentRole={role} alerts={alerts} announcements={announcementsList} onNavigate={handleNavigate} onSOSActivate={handleSOSActivate} />;
       case "report": return <ReportTab onNavigate={handleNavigate} onReportSubmitted={handleReportSubmitted} />;
-      case "map": return <MapTab currentRole={role} towers={towersList} onTowersChange={setTowersList} sosAlert={sosAlert || incomingSOS} />;
+      case "map": return <MapTab currentRole={role} towers={towersList} onTowersChange={setTowersList} sosAlert={sosAlert || incomingSOS} activeSOSAlerts={activeSOSAlerts} />;
       case "alerts": return <AlertsTab alerts={alerts} currentRole={role} onAlertsChange={setAlerts} />;
       case "roles": return <RolesTab currentUser={currentUser} currentRole={role} users={users} onUsersChange={setUsers} />;
       case "admin": return <AdminTab currentRole={role} alerts={alerts} announcements={announcementsList} onAnnouncementsChange={setAnnouncementsList} guards={guardsList} onGuardsChange={setGuardsList} towers={towersList} onTowersChange={setTowersList} currentUser={currentUser} />;
