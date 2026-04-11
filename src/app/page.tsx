@@ -50,6 +50,11 @@ import {
   LogOut,
   Heart,
   Filter,
+  Server,
+  Wifi,
+  WifiOff,
+  RefreshCw,
+  Globe,
   Plus,
   Crown,
   BadgeCheck,
@@ -91,7 +96,7 @@ import {
   type Conjunto,
   type SampleUser,
 } from "@/lib/mock-data";
-import { enableOfflineMode, initOfflineData } from "@/lib/offline-api";
+import { enableOfflineMode, initOfflineData, changeServerUrl, getCurrentServerUrl, testServerConnection, isServerAvailable } from "@/lib/offline-api";
 import { getCurrentPosition, requestLocationPermission } from "@/lib/gps-location";
 
 /* Enable offline mode (intercepts all /api/* fetch calls to use localStorage) */
@@ -884,12 +889,16 @@ function SOSOverlay({ onCancel }: { onCancel: () => void }) {
    TOP BAR
    ═══════════════════════════════════════════════════════════ */
 
-function TopBar({ currentUser, currentRole, onNavigate, alertCount }: { currentUser: UserProfile; currentRole: Role; onNavigate: (tab: TabId) => void; alertCount: number }) {
+function TopBar({ currentUser, currentRole, onNavigate, alertCount, serverConnected }: { currentUser: UserProfile; currentRole: Role; onNavigate: (tab: TabId) => void; alertCount: number; serverConnected?: boolean }) {
   return (
     <div className="bg-gradient-to-r from-[#0f4c81] to-[#0d3d66] px-4 pt-3 pb-3 flex-shrink-0">
       <div className="flex items-center justify-between text-white/80">
         <span className="text-[10px] font-medium">9:41</span>
         <div className="flex items-center gap-1.5">
+          {/* Connection status indicator */}
+          <div className="flex items-center gap-1" title={serverConnected ? "Servidor conectado" : "Sin conexion al servidor"}>
+            {serverConnected ? <Wifi className="w-3 h-3 text-green-400" /> : <WifiOff className="w-3 h-3 text-red-400" />}
+          </div>
           <div className="flex items-end gap-0.5">
             <div className="w-1 h-1.5 bg-white/80 rounded-sm" />
             <div className="w-1 h-2.5 bg-white/80 rounded-sm" />
@@ -905,7 +914,7 @@ function TopBar({ currentUser, currentRole, onNavigate, alertCount }: { currentU
           </div>
           <div className="flex items-center gap-2">
             <span className="text-white font-bold text-sm">Servicios Integrales CyJ</span>
-            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+            <div className={`w-2 h-2 rounded-full animate-pulse ${serverConnected !== false ? "bg-green-400" : "bg-red-400"}`} />
           </div>
         </div>
         <button
@@ -2877,6 +2886,38 @@ function ProfileTab({
   const [privacy, setPrivacy] = useState({ location: true, profile: true, anonymous: false });
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showRoleSelector, setShowRoleSelector] = useState(false);
+  /* ─── SERVER CONFIG ─── */
+  const [serverUrl, setServerUrlState] = useState(() => {
+    if (typeof window !== "undefined") return getCurrentServerUrl();
+    return "";
+  });
+  const [serverStatus, setServerStatus] = useState<{ connected: boolean; message: string; testing: boolean }>({ connected: false, message: "Sin verificar", testing: false });
+
+  // Auto-test connection on mount
+  useEffect(() => {
+    if (serverUrl) {
+      testServerConnection(serverUrl).then((result) => {
+        setServerStatus({ connected: result.success, message: result.message, testing: false });
+      });
+    }
+  }, []);
+
+  const handleTestConnection = async () => {
+    setServerStatus((prev) => ({ ...prev, testing: true }));
+    const result = await testServerConnection(serverUrl || undefined);
+    setServerStatus({ connected: result.success, message: result.message, testing: false });
+  };
+
+  const handleSaveServerUrl = async () => {
+    setServerStatus((prev) => ({ ...prev, testing: true }));
+    const result = await changeServerUrl(serverUrl);
+    setServerStatus({ connected: result.success, message: result.message, testing: false });
+    if (result.success) {
+      toast({ title: "Servidor configurado", description: result.message });
+    } else {
+      toast({ title: "Advertencia", description: result.message, variant: "destructive" });
+    }
+  };
 
   const handleSave = async () => {
     try {
@@ -3047,6 +3088,74 @@ function ProfileTab({
         </div>
       </div>
 
+      {/* ─── SERVER CONFIGURATION ─── */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <h3 className="px-4 py-3 text-sm font-bold text-slate-900 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
+          <Server className="w-4 h-4 text-blue-600" />
+          Configuracion del Servidor
+          <div className={`ml-auto flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${serverStatus.connected ? "bg-green-100 text-green-700" : serverStatus.testing ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-600"}`}>
+            {serverStatus.testing ? (
+              <><RefreshCw className="w-3 h-3 animate-spin" /> Probando...</>
+            ) : serverStatus.connected ? (
+              <><Wifi className="w-3 h-3" /> Conectado</>
+            ) : (
+              <><WifiOff className="w-3 h-3" /> Desconectado</>
+            )}
+          </div>
+        </h3>
+        <div className="p-4 space-y-3">
+          <p className="text-[11px] text-slate-500 leading-relaxed">
+            Ingresa la URL o IP del servidor donde esta instalada la plataforma CyJ. Todos los dispositivos deben conectar al mismo servidor para compartir alertas, SOS y datos del mapa en tiempo real.
+          </p>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Input
+                type="url"
+                value={serverUrl}
+                onChange={(e) => { setServerUrlState(e.target.value); setServerStatus({ connected: false, message: "URL modificada — guarda para aplicar", testing: false }); }}
+                placeholder="http://192.168.1.100:3000"
+                className="pl-9 text-sm h-10 rounded-lg border-slate-200 focus:border-blue-500"
+              />
+            </div>
+            <Button
+              onClick={handleTestConnection}
+              disabled={serverStatus.testing || !serverUrl}
+              variant="outline"
+              size="sm"
+              className="h-10 px-3 rounded-lg border-slate-200"
+            >
+              {serverStatus.testing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Wifi className="w-4 h-4" />}
+            </Button>
+          </div>
+          {serverStatus.message && (
+            <div className={`text-[11px] px-3 py-2 rounded-lg ${serverStatus.connected ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>
+              {serverStatus.message}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <Button onClick={handleSaveServerUrl} disabled={serverStatus.testing} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs py-2.5 rounded-lg h-10">
+              Guardar URL
+            </Button>
+            <Button
+              onClick={async () => { setServerUrlState(""); const r = await changeServerUrl(""); setServerStatus({ connected: r.success, message: r.message, testing: false }); toast({ title: "URL reiniciada", description: "Se usara la configuracion por defecto" }); }}
+              variant="outline"
+              size="sm"
+              className="h-10 px-3 rounded-lg border-slate-200 text-xs"
+            >
+              Reiniciar
+            </Button>
+          </div>
+          <div className="text-[10px] text-slate-400 space-y-1">
+            <p className="font-semibold text-slate-500">Ejemplos:</p>
+            <p>&#8226; Misma red WiFi: <code className="bg-slate-100 px-1 rounded">http://192.168.1.100:3000</code></p>
+            <p>&#8226; Servidor en la nube: <code className="bg-slate-100 px-1 rounded">https://seguridad.cyj.cl</code></p>
+            <p>&#8226; IP publica: <code className="bg-slate-100 px-1 rounded">http://45.67.89.123:3000</code></p>
+            <p>&#8226; Emulador Android: <code className="bg-slate-100 px-1 rounded">http://10.0.2.2:3000</code></p>
+          </div>
+        </div>
+      </div>
+
       {/* Community */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <h3 className="px-4 py-3 text-sm font-bold text-slate-900 bg-slate-50 border-b border-slate-100">Comunidad</h3>
@@ -3127,6 +3236,7 @@ export default function HomePage() {
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [showInstallGuide, setShowInstallGuide] = useState(false);
   const deferredPrompt = useRef<any>(null);
+  const [serverConnected, setServerConnected] = useState<boolean | null>(null);
 
   /* ─── STATEFUL ALERTS ─── */
   const [alerts, setAlerts] = useState<Alert[]>(mockAlerts);
@@ -3401,6 +3511,27 @@ export default function HomePage() {
     };
   }, [isLoggedIn, sosActive, currentUser]);
 
+  /* ─── SERVER CONNECTION MONITOR ─── */
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    const checkConnection = async () => {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const res = await fetch("/api/alerts", { signal: controller.signal });
+        clearTimeout(timeoutId);
+        setServerConnected(res.ok);
+      } catch {
+        setServerConnected(false);
+      }
+    };
+
+    checkConnection();
+    const interval = setInterval(checkConnection, 30000); // Check every 30s
+    return () => clearInterval(interval);
+  }, [isLoggedIn]);
+
   /* PWA install prompt */
   useEffect(() => {
     const dismissed = localStorage.getItem(INSTALL_DISMISSED_KEY);
@@ -3537,7 +3668,7 @@ export default function HomePage() {
     <div className="min-h-screen bg-slate-100 flex justify-center">
       <div className="w-full max-w-md bg-slate-50 min-h-screen relative flex flex-col shadow-none md:shadow-2xl md:rounded-[2.5rem] md:border md:border-slate-200 overflow-hidden">
         {/* Top Bar */}
-        <TopBar currentUser={currentUser!} currentRole={role!} onNavigate={handleNavigate} alertCount={alerts.filter((a) => a.status === "activa").length} />
+        <TopBar currentUser={currentUser!} currentRole={role!} onNavigate={handleNavigate} alertCount={alerts.filter((a) => a.status === "activa").length} serverConnected={serverConnected ?? undefined} />
 
         {/* Tab content */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide">

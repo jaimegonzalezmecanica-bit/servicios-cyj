@@ -1,126 +1,131 @@
 #!/bin/bash
-# deploy-server.sh - Deploy Servicios CyJ to a server with fixed IP
-# This script makes the app "always online" by setting up a production server
+# deploy-server.sh - Instructions and helper to deploy the CyJ server
+# This makes your server "always online" so all devices can connect
 #
-# USAGE:
-#   1. Copy this project to your server (VPS, dedicated server, etc.)
-#   2. Run: bash deploy-server.sh
-#   3. The app will be available 24/7 on your server's IP
-#
-# REQUIREMENTS: A server (VPS) with Ubuntu/Debian, 1GB RAM minimum
-# Recommended: DigitalOcean, Linode, AWS Lightsail, Hetzner ($5-10/month)
+# USAGE: Just read the instructions below and follow the steps.
 
-set -e
-
-echo "============================================"
-echo "  DEPLOY SERVER - Servicios CyJ"
-echo "  24/7 Online Security Platform"
-echo "============================================"
+echo "╔══════════════════════════════════════════════════════════╗"
+echo "║  SERVICIOS INTEGRALES CyJ - GUÍA DE DESPLIEGUE          ║"
+echo "║  Cómo tener el servidor SIEMPRE ONLINE                  ║"
+echo "╚══════════════════════════════════════════════════════════╝"
 echo ""
-
-# ─── CONFIGURATION ───
-# Change these values to match your server
-APP_NAME="servicios-cyj"
-APP_DIR="/opt/servicios-cyj"
-APP_PORT=3000
-DOMAIN=""  # Set this if you have a domain (e.g., "seguridad.cyj.cl")
-
-# ─── INSTALL DEPENDENCIES ───
-echo "[1/6] Installing system dependencies..."
-if command -v apt-get &> /dev/null; then
-    sudo apt-get update -qq
-    sudo apt-get install -y -qq curl unzip sqlite3 > /dev/null 2>&1
-fi
-
-# Install Bun if not present
-if ! command -v bun &> /dev/null; then
-    echo "[INFO] Installing Bun runtime..."
-    curl -fsSL https://bun.sh/install | bash
-    export PATH="$HOME/.bun/bin:$PATH"
-fi
-
-# ─── SETUP APP DIRECTORY ───
-echo "[2/6] Setting up application directory..."
-sudo mkdir -p "$APP_DIR"
-sudo chown -R $USER:$USER "$APP_DIR"
-
-# Copy project files to app directory
-if [ "$(pwd)" != "$APP_DIR" ]; then
-    echo "[INFO] Copying project files to $APP_DIR..."
-    rsync -a --exclude='node_modules' --exclude='.next' --exclude='android' --exclude='ios' --exclude='upload' \
-        ./ "$APP_DIR/"
-    cd "$APP_DIR"
-fi
-
-# ─── INSTALL NPM DEPENDENCIES ───
-echo "[3/6] Installing dependencies..."
-bun install --production 2>&1 | tail -3
-
-# ─── SETUP DATABASE ───
-echo "[4/6] Setting up database..."
-mkdir -p db
-if [ ! -f db/custom.db ]; then
-    echo "[INFO] Creating new database..."
-    bunx prisma db push --skip-generate 2>&1 | tail -3
-    bunx prisma generate 2>&1 | tail -2
-fi
-
-# ─── BUILD APPLICATION ───
-echo "[5/6] Building production application..."
-NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 bun run build 2>&1 | tail -5
-
-# ─── SETUP SYSTEMD SERVICE (auto-start on boot) ───
-echo "[6/6] Creating systemd service for auto-start..."
-sudo tee /etc/systemd/system/${APP_NAME}.service > /dev/null << EOF
-[Unit]
-Description=Servicios Integrales CyJ - Security Platform
-After=network.target
-StartLimitIntervalSec=60
-StartLimitBurst=5
-
-[Service]
-Type=simple
-User=$USER
-WorkingDirectory=$APP_DIR
-Environment=NODE_ENV=production
-Environment=PORT=$APP_PORT
-Environment=DATABASE_URL=file:./db/custom.db
-ExecStart=$(which bun) run start
-Restart=always
-RestartSec=5
-StandardOutput=append:/var/log/${APP_NAME}.log
-StandardError=append:/var/log/${APP_NAME}-error.log
-
-# Resource limits
-MemoryMax=512M
-CPUQuota=100%
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-sudo systemctl daemon-reload
-sudo systemctl enable ${APP_NAME}
-sudo systemctl restart ${APP_NAME}
-
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  OPCIÓN 1: SERVIDOR LOCAL (misma red WiFi)"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "============================================"
-echo "  DEPLOYMENT COMPLETE!"
-echo "============================================"
+echo "  1. Encuentra la IP de tu computadora en la red local:"
+echo "     - Windows: abrir CMD > ipconfig > IPv4 Address"
+echo "     - Mac/Linux: abrir terminal > ifconfig o ip addr"
 echo ""
-echo "  Server Status: Running"
-echo "  App URL: http://$(hostname -I | awk '{print $1}'):$APP_PORT"
-echo "  Log file: /var/log/${APP_NAME}.log"
+echo "  2. Asegúrate de que el puerto 3000 esté abierto en tu"
+echo "     firewall. En la app ve a:"
+echo "       Perfil > Configuración del Servidor"
+echo "     Y escribe: http://TU_IP:3000"
+echo "     Ejemplo: http://192.168.1.100:3000"
 echo ""
-echo "  Commands:"
-echo "    sudo systemctl status $APP_NAME    # Check status"
-echo "    sudo systemctl restart $APP_NAME   # Restart"
-echo "    sudo journalctl -u $APP_NAME -f    # Live logs"
+echo "  LIMITACIÓN: Solo funciona si todos están en la misma WiFi."
 echo ""
-echo "  To build the APK with this server URL:"
-echo "    CYJ_SERVER_URL=http://$(hostname -I | awk '{print $1}'):3000 bash build-apk.sh"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  OPCIÓN 2: VPS / SERVIDOR EN LA NUBE (RECOMENDADO)"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-
-# Show status
-sleep 2
-sudo systemctl status ${APP_NAME} --no-pager -l 2>&1 | head -15
+echo "  Servidores recomendados (baratos desde ~$5/mes):"
+echo "    - DigitalOcean: digitalocean.com"
+echo "    - Hetzner: hetzner.com (desde €3/mes)"
+echo "    - AWS Lightsail: aws.amazon.com/lightsail"
+echo "    - Linode: linode.com"
+echo ""
+echo "  Pasos para desplegar:"
+echo ""
+echo "  1. Crea un servidor (VPS) con Ubuntu 22.04"
+echo "  2. Conéctate por SSH:"
+echo "     ssh root@TU_IP_DEL_SERVIDOR"
+echo ""
+echo "  3. Instala Node.js:"
+echo "     curl -fsSL https://deb.nodesource.com/setup_20.x | bash -"
+echo "     apt install -y nodejs"
+echo ""
+echo "  4. Copia los archivos del proyecto al servidor:"
+echo "     scp -r ./project root@TU_IP:/root/cyj-server/"
+echo ""
+echo "  5. Instala dependencias y genera la base de datos:"
+echo "     cd /root/cyj-server"
+echo "     npm install"
+echo "     npx prisma generate"
+echo "     npx prisma db push"
+echo ""
+echo "  6. Inicia el servidor con PM2 (para que se reinicie solo):"
+echo "     npm install -g pm2"
+echo "     pm2 start npm --name cyj-server -- start"
+echo "     pm2 save"
+echo "     pm2 startup  # Para que inicie con el sistema"
+echo ""
+echo "  7. Configura el firewall:"
+echo "     ufw allow 22    # SSH"
+echo "     ufw allow 3000  # Servidor CyJ"
+echo "     ufw enable"
+echo ""
+echo "  8. En la app, ve a Perfil > Configuración del Servidor"
+echo "     Y escribe: http://TU_IP_DEL_SERVIDOR:3000"
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  OPCIÓN 3: DOMINIO + HTTPS (producción profesional)"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "  Después de tener el VPS funcionando (Opción 2):"
+echo ""
+echo "  1. Compra un dominio (ej: seguridad-cyj.cl en nic.cl)"
+echo "  2. Apunta el dominio a tu IP del servidor (registro DNS A)"
+echo "  3. Instala Nginx como proxy inverso:"
+echo "     apt install nginx"
+echo ""
+echo "  4. Configura Nginx (/etc/nginx/sites-available/cyj):"
+echo "     server {"
+echo "         listen 80;"
+echo "         server_name seguridad-cyj.cl;"
+echo "         location / {"
+echo "             proxy_pass http://localhost:3000;"
+echo "             proxy_http_version 1.1;"
+echo "             proxy_set_header Upgrade \$http_upgrade;"
+echo "             proxy_set_header Connection 'upgrade';"
+echo "             proxy_set_header Host \$host;"
+echo "             proxy_cache_bypass \$http_upgrade;"
+echo "         }"
+echo "     }"
+echo ""
+echo "  5. Instala certificado SSL gratis con Let's Encrypt:"
+echo "     apt install certbot python3-certbot-nginx"
+echo "     certbot --nginx -d seguridad-cyj.cl"
+echo ""
+echo "  6. En la app, configura: https://seguridad-cyj.cl"
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  OPCIÓN 4: TÚNEL LOCAL (rápido, sin VPS)"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "  Usa Cloudflare Tunnel (gratis) para exponer tu servidor:"
+echo ""
+echo "  1. Crea cuenta en dash.cloudflare.com"
+echo "  2. Instala cloudflared:"
+echo "     - Mac: brew install cloudflared"
+echo "     - Linux: curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared && chmod +x /usr/local/bin/cloudflared"
+echo "     - Windows: winget install Cloudflare.cloudflared"
+echo ""
+echo "  3. Inicia el túnel:"
+echo "     cloudflared tunnel --url http://localhost:3000"
+echo ""
+echo "  4. Cloudflare te dará una URL como:"
+echo "     https://abc123.trycloudflare.com"
+echo ""
+echo "  5. En la app, configura esa URL."
+echo "  NOTA: La URL cambia cada vez que reinicias el túnel."
+echo "        Para URL fija, necesitas un dominio en Cloudflare."
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "  IMPORTANTE:"
+echo "  - Todos los dispositivos DEBEN usar la MISMA URL"
+echo "  - El servidor DEBE estar encendido para que la app funcione"
+echo "  - Con un VPS (Opción 2) el servidor está online 24/7"
+echo "  - La URL se configura desde la app: Perfil > Servidor"
+echo ""

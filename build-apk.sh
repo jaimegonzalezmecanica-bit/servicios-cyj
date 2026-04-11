@@ -1,26 +1,37 @@
 #!/bin/bash
 # build-apk.sh - Build APK for Servicios Integrales CyJ
-# Architecture: Client-Server (APK connects to real backend server)
-# All devices share data through the server's database
-# SOS alarms sound on ALL connected devices in real-time via SSE
+# The server URL is now CONFIGURABLE FROM THE APP (Profile > Server Config)
+# The URL below is just the DEFAULT — users can change it in the app settings
+#
+# IMPORTANT: All devices MUST connect to the SAME server URL to share:
+#   - SOS alerts (real-time alarm on ALL devices)
+#   - Regular alerts and reports
+#   - Map configuration and markers
+#   - User data and announcements
 
 set -e
 
 echo "============================================"
-echo "  BUILDING APK - Servicios CyJ"
+echo "  BUILDING APK - Servicios CyJ v2.1.0"
 echo "  Real-Time Security Platform"
 echo "============================================"
 
 cd /home/z/my-project
 
 # =============================================
-# CONFIGURE SERVER URL HERE
-# This MUST be the URL/IP where your server is running
-# All devices connect to this URL for shared data
+# DEFAULT SERVER URL
+# Users can CHANGE this from the app:
+#   Profile > Configuracion del Servidor
+#
+# The URL below is baked-in as default but
+# can be overridden in-app at any time.
 # =============================================
 SERVER_URL="${CYJ_SERVER_URL:-http://10.0.2.2:3000}"
 echo ""
-echo "[CONFIG] Server URL: $SERVER_URL"
+echo "[CONFIG] Default Server URL: $SERVER_URL"
+echo ""
+echo "  USERS CAN CHANGE THE URL IN THE APP:"
+echo "    Perfil > Configuracion del Servidor"
 echo ""
 echo "  EXAMPLES:"
 echo "    Android emulator (same PC):   http://10.0.2.2:3000"
@@ -28,7 +39,7 @@ echo "    Real devices on same WiFi:    http://192.168.1.100:3000"
 echo "    Deployed server (VPS):        https://seguridad.cyj.cl"
 echo "    Server with IP:               http://45.67.89.123:3000"
 echo ""
-echo "  TO CHANGE: export CYJ_SERVER_URL=http://YOUR_SERVER:3000"
+echo "  TO CHANGE DEFAULT: export CYJ_SERVER_URL=http://YOUR_SERVER:3000"
 echo ""
 
 # Step 1: Backup API routes (static export can't have API routes)
@@ -110,15 +121,21 @@ echo ""
 echo "============================================"
 echo "  APK BUILT SUCCESSFULLY!"
 echo "  Location: download/Servicios-CyJ.apk"
-echo "  Server URL: $SERVER_URL"
+echo "  Default URL: $SERVER_URL"
 echo "============================================"
 echo ""
-echo "  THIS APK connects to: $SERVER_URL"
+echo "  SERVER URL IS NOW CONFIGURABLE IN THE APP!"
+echo "  Users can change it from:"
+echo "    Perfil > Configuracion del Servidor"
 echo ""
-echo "  IMPORTANT: The server must be running at that URL!"
+echo "  IMPORTANT: The server must be running and"
+echo "  accessible from all devices."
 echo ""
 echo "  To deploy the server (always online):"
-echo "    bash deploy-server.sh"
+echo "    1. Get a VPS/server (DigitalOcean, AWS, etc.)"
+echo "    2. Install Node.js and run: node server.js"
+echo "    3. Set up HTTPS (recommended)"
+echo "    4. All devices connect to your server URL"
 echo ""
 echo "  To test locally (same WiFi):"
 echo "    CYJ_SERVER_URL=http://192.168.1.XXX:3000 bash build-apk.sh"
