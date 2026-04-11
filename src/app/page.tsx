@@ -168,7 +168,33 @@ function CategoryIcon({ name, size = 18 }: { name: string; size?: number }) {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   AUDIO NOTIFICATIONS - Web Audio API
+   HAPTIC FEEDBACK - iOS & Android vibration
+   ═══════════════════════════════════════════════════════════ */
+
+async function triggerHaptic(type: 'heavy' | 'medium' | 'light' | 'sos' = 'medium') {
+  try {
+    if (typeof window === 'undefined') return;
+    const cap = (window as any).Capacitor;
+    if (!cap?.isNativePlatform?.()) return;
+    const { Haptics, ImpactStyle, NotificationType } = await import('@capacitor/haptics');
+    if (type === 'sos') {
+      // Repeated heavy impacts for SOS urgency
+      for (let i = 0; i < 5; i++) {
+        await Haptics.impact({ style: ImpactStyle.Heavy });
+        await new Promise(r => setTimeout(r, 200));
+      }
+    } else if (type === 'heavy') {
+      await Haptics.impact({ style: ImpactStyle.Heavy });
+    } else if (type === 'medium') {
+      await Haptics.impact({ style: ImpactStyle.Medium });
+    } else {
+      await Haptics.impact({ style: ImpactStyle.Light });
+    }
+  } catch { /* Haptics not available */ }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   AUDIO NOTIFICATIONS - Web Audio API (cross-platform iOS/Android)
    ═══════════════════════════════════════════════════════════ */
 
 let _audioCtx: AudioContext | null = null;
@@ -240,6 +266,8 @@ function playSOSSound(): void {
       playTone(ctx, base + 0.80, 1200, 0.08, "square", 0.30);
       playTone(ctx, base + 0.92, 1200, 0.08, "square", 0.30);
     }
+    // Trigger haptic feedback for SOS (vibration on iOS/Android)
+    triggerHaptic('sos');
   } catch { /* Audio not available */ }
 }
 
@@ -260,6 +288,8 @@ function playAlertSound(): void {
     playTone(ctx, now + 0.57, 783.99, 0.35, "sine", 0.20); // G5
     // Final ring: high C6 with sustain
     playTone(ctx, now + 0.95, 1046.50, 0.50, "sine", 0.12); // C6
+    // Light haptic for regular alert
+    triggerHaptic('medium');
   } catch { /* Audio not available */ }
 }
 
@@ -274,6 +304,8 @@ function playNotifSound(): void {
     const now = ctx.currentTime;
     playTone(ctx, now, 800, 0.12, "sine", 0.10);
     playTone(ctx, now + 0.15, 1000, 0.15, "sine", 0.10);
+    // Light haptic for minor notifications
+    triggerHaptic('light');
   } catch { /* Audio not available */ }
 }
 
