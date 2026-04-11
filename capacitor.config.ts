@@ -5,9 +5,8 @@ const config: CapacitorConfig = {
   appName: 'Servicios Integrales CyJ',
   webDir: 'out',
   server: {
-    url: 'https://grad-white-monitors-article.trycloudflare.com',
-    allowNavigation: ['*.trycloudflare.com', '*.cyj.cl', 'localhost:*'],
     androidScheme: 'https',
+    allowNavigation: ['*'],
   },
   android: {
     allowMixedContent: true,

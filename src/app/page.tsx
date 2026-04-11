@@ -91,6 +91,13 @@ import {
   type Conjunto,
   type SampleUser,
 } from "@/lib/mock-data";
+import { enableOfflineMode, initOfflineData } from "@/lib/offline-api";
+
+/* Enable offline mode (intercepts all /api/* fetch calls to use localStorage) */
+if (typeof window !== "undefined") {
+  initOfflineData();
+  enableOfflineMode();
+}
 
 /* ═══════════════════════════════════════════════════════════
    DYNAMIC IMPORT: Leaflet Map (no SSR)
