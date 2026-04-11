@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useCallback } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -44,6 +44,9 @@ export interface PerimeterPoint {
   lng: number;
 }
 
+/* Edit sub-modes for the perimeter */
+export type PerimeterEditMode = "none" | "move" | "draw" | "vertices";
+
 interface MapViewProps {
   condominios?: CondominioMapData[];
   editMode?: boolean;
@@ -52,6 +55,7 @@ interface MapViewProps {
   onEntranceChange?: (lat: number, lng: number) => void;
   perimeter?: PerimeterPoint[];
   onPerimeterChange?: (points: PerimeterPoint[]) => void;
+  perimeterEditMode?: PerimeterEditMode;
 }
 
 export default function MapView({
@@ -62,6 +66,7 @@ export default function MapView({
   onEntranceChange,
   perimeter,
   onPerimeterChange,
+  perimeterEditMode = "none",
 }: MapViewProps) {
   const mapRef = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -69,8 +74,14 @@ export default function MapView({
   const entranceMarkerRef = useRef<L.Marker | null>(null);
   const polygonRef = useRef<L.Polygon | null>(null);
   const vertexMarkersRef = useRef<Map<number, L.Marker>>(new Map());
+  const drawPointsRef = useRef<PerimeterPoint[]>([]);
+  const drawPolylineRef = useRef<L.Polyline | null>(null);
+  const drawTempMarkersRef = useRef<L.Marker[]>([]);
+  const mapClickHandlerRef = useRef<((e: L.LeafletMouseEvent) => void) | null>(null);
+  const isDraggingRef = useRef(false);
+  const dragStartRef = useRef<{ lat: number; lng: number } | null>(null);
+  const origPerimeterRef = useRef<PerimeterPoint[] | null>(null);
 
-  /* Default perimeter */
   const DEFAULT_PERIMETER: PerimeterPoint[] = [
     { lat: -33.3250, lng: -70.7610 },
     { lat: -33.3250, lng: -70.7650 },
@@ -78,7 +89,24 @@ export default function MapView({
     { lat: -33.3298, lng: -70.7610 },
   ];
 
-  const currentPerimeter = perimeter || DEFAULT_PERIMETER;
+  const currentPerimeter = perimeter && perimeter.length >= 3 ? perimeter : DEFAULT_PERIMETER;
+
+  /* Clean up draw mode artifacts */
+  const cleanupDraw = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    drawPointsRef.current = [];
+    if (drawPolylineRef.current) {
+      map.removeLayer(drawPolylineRef.current);
+      drawPolylineRef.current = null;
+    }
+    drawTempMarkersRef.current.forEach((m) => map.removeLayer(m));
+    drawTempMarkersRef.current = [];
+    if (mapClickHandlerRef.current) {
+      map.off("click", mapClickHandlerRef.current);
+      mapClickHandlerRef.current = null;
+    }
+  }, []);
 
   /* Init map */
   useEffect(() => {
@@ -89,6 +117,7 @@ export default function MapView({
       zoom: MAP_ZOOM,
       zoomControl: true,
       attributionControl: false,
+      zoomSnap: 0.0001,
     });
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -98,50 +127,152 @@ export default function MapView({
     mapRef.current = map;
 
     return () => {
+      cleanupDraw();
       map.remove();
       mapRef.current = null;
     };
-  }, []);
+  }, [cleanupDraw]);
 
-  /* Render polygon + vertex markers */
+  /* When switching away from draw mode, clean up */
+  useEffect(() => {
+    if (perimeterEditMode !== "draw") {
+      cleanupDraw();
+    }
+  }, [perimeterEditMode, cleanupDraw]);
+
+  /* ─── DRAW MODE: click to place points ─── */
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || perimeterEditMode !== "draw" || !onPerimeterChange) return;
 
-    /* Remove old polygon */
+    cleanupDraw();
+
+    const handleClick = (e: L.LeafletMouseEvent) => {
+      const { lat, lng } = e.latlng;
+      const pt = { lat, lng };
+      drawPointsRef.current.push(pt);
+
+      /* Add temporary marker */
+      const dot = L.circleMarker([lat, lng], {
+        radius: 6,
+        color: "#dc2626",
+        fillColor: "#dc2626",
+        fillOpacity: 1,
+        weight: 2,
+      }).addTo(map);
+      drawTempMarkersRef.current.push(dot);
+
+      /* Update preview polyline */
+      if (drawPolylineRef.current) map.removeLayer(drawPolylineRef.current);
+      if (drawPointsRef.current.length >= 2) {
+        drawPolylineRef.current = L.polyline(
+          drawPointsRef.current.map((p) => [p.lat, p.lng] as L.LatLngExpression),
+          { color: "#dc2626", weight: 3, dashArray: "6, 4" }
+        ).addTo(map);
+      }
+
+      /* If 3+ points, show live polygon preview */
+      if (drawPointsRef.current.length >= 3) {
+        onPerimeterChange([...drawPointsRef.current]);
+      }
+    };
+
+    mapClickHandlerRef.current = handleClick;
+    map.on("click", handleClick);
+
+    return () => {
+      if (mapClickHandlerRef.current) {
+        map.off("click", mapClickHandlerRef.current);
+        mapClickHandlerRef.current = null;
+      }
+    };
+  }, [perimeterEditMode, onPerimeterChange, cleanupDraw]);
+
+  /* ─── POLYGON + VERTEX / MOVE rendering ─── */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || perimeterEditMode === "draw") return;
+
+    /* Remove old */
     if (polygonRef.current) {
       map.removeLayer(polygonRef.current);
       polygonRef.current = null;
     }
     vertexMarkersRef.current.forEach((m) => map.removeLayer(m));
     vertexMarkersRef.current.clear();
+    isDraggingRef.current = false;
+    dragStartRef.current = null;
+    origPerimeterRef.current = null;
+
+    /* Remove any existing map click handlers for move mode */
+    if (mapClickHandlerRef.current) {
+      map.off("click", mapClickHandlerRef.current);
+      mapClickHandlerRef.current = null;
+    }
+
+    if (currentPerimeter.length < 3) return;
 
     const latLngs = currentPerimeter.map((p) => [p.lat, p.lng] as L.LatLngExpression);
 
     /* Draw polygon */
+    const isEditing = editMode && onPerimeterChange;
+    const isMoveMode = perimeterEditMode === "move";
+    const isVertexMode = perimeterEditMode === "vertices";
+
     polygonRef.current = L.polygon(latLngs, {
-      color: editMode ? "#dc2626" : "#0f4c81",
-      weight: editMode ? 3 : 2,
-      dashArray: editMode ? undefined : "8, 6",
-      fillColor: editMode ? "#dc2626" : "#0f4c81",
-      fillOpacity: editMode ? 0.06 : 0.04,
+      color: isMoveMode ? "#2563eb" : isVertexMode ? "#dc2626" : (isEditing ? "#dc2626" : "#0f4c81"),
+      weight: isMoveMode || isVertexMode ? 3 : 2,
+      dashArray: isMoveMode || isVertexMode ? undefined : "8, 6",
+      fillColor: isMoveMode ? "#2563eb" : isVertexMode ? "#dc2626" : (isEditing ? "#dc2626" : "#0f4c81"),
+      fillOpacity: isMoveMode ? 0.12 : isVertexMode ? 0.08 : (isEditing ? 0.06 : 0.04),
+      cursor: isMoveMode ? "move" : undefined,
     }).addTo(map);
 
-    /* In edit mode: add vertex markers */
-    if (editMode && onPerimeterChange) {
+    /* ── MOVE MODE: drag whole polygon ── */
+    if (isMoveMode && onPerimeterChange) {
+      polygonRef.current.on("mousedown", (e: L.LeafletMouseEvent) => {
+        isDraggingRef.current = true;
+        dragStartRef.current = { lat: e.latlng.lat, lng: e.latlng.lng };
+        origPerimeterRef.current = currentPerimeter.map((p) => ({ ...p }));
+        map.dragging.disable();
+      });
+
+      map.on("mousemove", (e: L.LeafletMouseEvent) => {
+        if (!isDraggingRef.current || !dragStartRef.current || !origPerimeterRef.current) return;
+        const dLat = e.latlng.lat - dragStartRef.current.lat;
+        const dLng = e.latlng.lng - dragStartRef.current.lng;
+        const moved = origPerimeterRef.current.map((p) => ({
+          lat: p.lat + dLat,
+          lng: p.lng + dLng,
+        }));
+        onPerimeterChange(moved);
+      });
+
+      map.on("mouseup", () => {
+        if (isDraggingRef.current) {
+          isDraggingRef.current = false;
+          dragStartRef.current = null;
+          origPerimeterRef.current = null;
+          map.dragging.enable();
+        }
+      });
+    }
+
+    /* ── VERTEX MODE: individual vertex markers ── */
+    if (isVertexMode && onPerimeterChange) {
       currentPerimeter.forEach((pt, idx) => {
         const vIcon = L.divIcon({
           className: "",
           html: `<div style="
-            width:16px;height:16px;
+            width:18px;height:18px;
             background:#dc2626;
-            border:2px solid white;
+            border:3px solid white;
             border-radius:50%;
-            box-shadow:0 1px 4px rgba(0,0,0,0.4);
+            box-shadow:0 1px 6px rgba(0,0,0,0.5);
             cursor:grab;
           "></div>`,
-          iconSize: [16, 16],
-          iconAnchor: [8, 8],
+          iconSize: [18, 18],
+          iconAnchor: [9, 9],
         });
 
         const vMarker = L.marker([pt.lat, pt.lng], {
@@ -160,8 +291,8 @@ export default function MapView({
 
         /* Double-click to remove vertex (min 3) */
         if (currentPerimeter.length > 3) {
-          vMarker.on("dblclick", () => {
-            L.DomEvent.stopPropagation(vMarker);
+          vMarker.on("dblclick", (e: L.LeafletMouseEvent) => {
+            L.DomEvent.stopPropagation(e);
             const updated = currentPerimeter.filter((_, i) => i !== idx);
             onPerimeterChange(updated);
           });
@@ -174,8 +305,6 @@ export default function MapView({
       /* Click on polygon edge to add vertex */
       polygonRef.current.on("click", (e: L.LeafletMouseEvent) => {
         const { lat, lng } = e.latlng;
-
-        /* Find closest edge */
         let bestIdx = 0;
         let bestDist = Infinity;
         for (let i = 0; i < currentPerimeter.length; i++) {
@@ -188,7 +317,6 @@ export default function MapView({
             bestIdx = j;
           }
         }
-
         const updated = [...currentPerimeter];
         updated.splice(bestIdx, 0, { lat, lng });
         onPerimeterChange(updated);
@@ -202,10 +330,12 @@ export default function MapView({
       }
       vertexMarkersRef.current.forEach((m) => map.removeLayer(m));
       vertexMarkersRef.current.clear();
+      map.off("mousemove");
+      map.off("mouseup");
     };
-  }, [currentPerimeter, editMode, onPerimeterChange]);
+  }, [currentPerimeter, editMode, onPerimeterChange, perimeterEditMode]);
 
-  /* Render entrance marker */
+  /* ─── ENTRANCE MARKER ─── */
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -264,7 +394,7 @@ export default function MapView({
     };
   }, [entrance, editMode, onEntranceChange]);
 
-  /* Render condominio markers */
+  /* ─── CONDOMINIO MARKERS ─── */
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;

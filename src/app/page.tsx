@@ -67,6 +67,7 @@ import {
   Download,
   X,
   Trash2,
+  Move,
 } from "lucide-react";
 import {
   mockAlerts,
@@ -971,6 +972,7 @@ function MapTab({ currentRole, towers, onTowersChange }: { currentRole: any; tow
     { lat: -33.3298, lng: -70.7650 },
     { lat: -33.3298, lng: -70.7610 },
   ]);
+  const [perimeterMode, setPerimeterMode] = useState<"none" | "move" | "draw" | "vertices">("none");
 
   const canEdit = currentRole?.permissions?.canViewStats || currentRole?.role === "super_admin" || currentRole?.role === "admin";
 
@@ -1000,6 +1002,31 @@ function MapTab({ currentRole, towers, onTowersChange }: { currentRole: any; tow
     setPerimeter(points);
   }, []);
 
+  const toggleEditMode = () => {
+    if (editMode) {
+      setEditMode(false);
+      setPerimeterMode("none");
+    } else {
+      setEditMode(true);
+    }
+  };
+
+  const togglePerimeterMode = (mode: "none" | "move" | "draw" | "vertices") => {
+    setPerimeterMode(perimeterMode === mode ? "none" : mode);
+  };
+
+  const resetPerimeter = () => {
+    setPerimeter([
+      { lat: -33.3250, lng: -70.7610 },
+      { lat: -33.3250, lng: -70.7650 },
+      { lat: -33.3298, lng: -70.7650 },
+      { lat: -33.3298, lng: -70.7610 },
+    ]);
+    setPerimeterMode("none");
+    setSavedToast(true);
+    setTimeout(() => setSavedToast(false), 2500);
+  };
+
   return (
     <div className="space-y-0 pb-4 animate-fade-in">
       <div className="flex items-center justify-between">
@@ -1007,7 +1034,7 @@ function MapTab({ currentRole, towers, onTowersChange }: { currentRole: any; tow
         <div className="flex items-center gap-2">
           {canEdit && (
             <button
-              onClick={() => setEditMode(!editMode)}
+              onClick={toggleEditMode}
               className={`px-3 py-2 rounded-xl text-xs font-bold border-2 transition-all active:scale-95 flex items-center gap-1.5 ${
                 editMode
                   ? "bg-red-50 border-red-300 text-red-600"
@@ -1023,22 +1050,90 @@ function MapTab({ currentRole, towers, onTowersChange }: { currentRole: any; tow
           )}
         </div>
       </div>
+
+      {/* Perimeter edit toolbar */}
       {editMode && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mt-2 space-y-1">
-          <div className="flex items-center gap-2">
-            <Pencil className="w-4 h-4 text-amber-600 flex-shrink-0" />
-            <p className="text-[11px] text-amber-800 font-medium">Arrastra los marcadores rojos para reposicionar barrios, entrada y vértices del cuadrante.</p>
+        <div className="mt-2 space-y-2">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            <button
+              onClick={() => togglePerimeterMode("move")}
+              className={`px-3 py-2 rounded-lg text-[10px] font-bold border-2 transition-all active:scale-95 flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 ${
+                perimeterMode === "move"
+                  ? "bg-blue-600 border-blue-600 text-white"
+                  : "bg-white border-blue-200 text-blue-700"
+              }`}
+            >
+              <Move className="w-3.5 h-3.5" /> Mover cuadrante
+            </button>
+            <button
+              onClick={() => togglePerimeterMode("draw")}
+              className={`px-3 py-2 rounded-lg text-[10px] font-bold border-2 transition-all active:scale-95 flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 ${
+                perimeterMode === "draw"
+                  ? "bg-orange-600 border-orange-600 text-white"
+                  : "bg-white border-orange-200 text-orange-700"
+              }`}
+            >
+              <Pencil className="w-3.5 h-3.5" /> Dibujar nuevo
+            </button>
+            <button
+              onClick={() => togglePerimeterMode("vertices")}
+              className={`px-3 py-2 rounded-lg text-[10px] font-bold border-2 transition-all active:scale-95 flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 ${
+                perimeterMode === "vertices"
+                  ? "bg-red-600 border-red-600 text-white"
+                  : "bg-white border-red-200 text-red-700"
+              }`}
+            >
+              <Settings className="w-3.5 h-3.5" /> Ajustar vértices
+            </button>
+            <button
+              onClick={resetPerimeter}
+              className="px-3 py-2 rounded-lg text-[10px] font-bold border-2 border-slate-200 text-slate-500 bg-white transition-all active:scale-95 flex items-center gap-1.5 whitespace-nowrap flex-shrink-0"
+            >
+              <Wrench className="w-3.5 h-3.5" /> Restablecer
+            </button>
           </div>
-          <div className="flex items-start gap-2 pl-6">
-            <span className="text-[10px] text-amber-700">&#x271A;</span>
-            <p className="text-[10px] text-amber-700">Click en el borde del cuadrante para agregar un vértice.</p>
-          </div>
-          <div className="flex items-start gap-2 pl-6">
-            <span className="text-[10px] text-amber-700">&#x2716;</span>
-            <p className="text-[10px] text-amber-700">Doble click en un vértice rojo para eliminarlo (mínimo 3).</p>
-          </div>
+
+          {/* Context help */}
+          {perimeterMode === "move" && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5 flex items-center gap-2">
+              <Move className="w-4 h-4 text-blue-600 flex-shrink-0" />
+              <p className="text-[10px] text-blue-800 font-medium">Haz click y arrastra sobre el cuadrante azul para moverlo completo a otra posición.</p>
+            </div>
+          )}
+          {perimeterMode === "draw" && (
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-2.5 space-y-1">
+              <div className="flex items-center gap-2">
+                <Pencil className="w-4 h-4 text-orange-600 flex-shrink-0" />
+                <p className="text-[10px] text-orange-800 font-medium">Haz click en el mapa para trazar el cuadrante desde cero.</p>
+              </div>
+              <p className="text-[10px] text-orange-600 pl-6">Cada click agrega un punto. Con 3 o más puntos se forma el polígono.</p>
+            </div>
+          )}
+          {perimeterMode === "vertices" && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-2.5 space-y-1">
+              <div className="flex items-center gap-2">
+                <Settings className="w-4 h-4 text-red-600 flex-shrink-0" />
+                <p className="text-[10px] text-red-800 font-medium">Arrastra los puntos rojos para ajustar cada vértice individualmente.</p>
+              </div>
+              <div className="flex items-start gap-2 pl-6">
+                <span className="text-[10px] text-red-600">&#x271A;</span>
+                <p className="text-[10px] text-red-600">Click en el borde para agregar un punto.</p>
+              </div>
+              <div className="flex items-start gap-2 pl-6">
+                <span className="text-[10px] text-red-600">&#x2716;</span>
+                <p className="text-[10px] text-red-600">Doble click en un punto para eliminarlo (mínimo 3).</p>
+              </div>
+            </div>
+          )}
+          {perimeterMode === "none" && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 flex items-center gap-2">
+              <Pencil className="w-4 h-4 text-amber-600 flex-shrink-0" />
+              <p className="text-[10px] text-amber-800 font-medium">Arrastra los marcadores rojos para mover barrios y la entrada. Usa los botones de arriba para editar el cuadrante.</p>
+            </div>
+          )}
         </div>
       )}
+
       <div className="relative h-[420px] rounded-2xl overflow-hidden shadow-sm border border-slate-200 mt-3">
         <MapView
           condominios={towers.map((t: any) => ({ id: t.id, name: t.name, type: t.type, lat: t.lat, lng: t.lng }))}
@@ -1048,6 +1143,7 @@ function MapTab({ currentRole, towers, onTowersChange }: { currentRole: any; tow
           onEntranceChange={handleEntranceChange}
           perimeter={perimeter}
           onPerimeterChange={handlePerimeterChange}
+          perimeterEditMode={perimeterMode}
         />
         {saving && (
           <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-sm rounded-xl px-4 py-2 shadow-lg z-[1000] flex items-center gap-2">
@@ -1058,7 +1154,7 @@ function MapTab({ currentRole, towers, onTowersChange }: { currentRole: any; tow
         {savedToast && (
           <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-green-50 border border-green-200 rounded-xl px-4 py-2 shadow-lg z-[1000] flex items-center gap-2 animate-fade-in">
             <Check className="w-4 h-4 text-green-600" />
-            <span className="text-[11px] font-semibold text-green-700">Ubicación guardada</span>
+            <span className="text-[11px] font-semibold text-green-700">Listo</span>
           </div>
         )}
       </div>
