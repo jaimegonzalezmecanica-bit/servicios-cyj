@@ -70,7 +70,6 @@ import {
 } from "lucide-react";
 import {
   mockAlerts,
-  incidentMarkers,
   reportCategories,
   communityStats,
   ROLES,
@@ -85,7 +84,6 @@ import {
   guardsOnDuty as mockGuards,
   type GuardOnDuty,
   type Alert,
-  type IncidentMarker,
   type RoleId,
   type Role,
   type UserProfile,
@@ -138,7 +136,7 @@ const ALL_TABS: TabDef[] = [
 
 const ALERT_FILTERS = ["Todas", "Activas", "Resueltas", "Mías"];
 
-const MAP_FILTERS = ["Todos", "Hoy", "Críticos", "Resueltos", "Mi zona"];
+
 
 /* ═══════════════════════════════════════════════════════════
    HELPERS
@@ -181,15 +179,6 @@ function getStatusColor(status: string) {
     case "en_revision": return "border-amber-500 bg-amber-50 text-amber-700";
     case "resuelta": return "border-green-500 bg-green-50 text-green-700";
     default: return "border-slate-300 bg-slate-50 text-slate-700";
-  }
-}
-
-function getSeverityColor(severity: string) {
-  switch (severity) {
-    case "critical": return "#dc2626";
-    case "warning": return "#f97316";
-    case "info": return "#3b82f6";
-    default: return "#64748b";
   }
 }
 
@@ -972,23 +961,15 @@ function ReportTab({
    ═══════════════════════════════════════════════════════════ */
 
 function MapTab({ currentRole, towers, onTowersChange }: { currentRole: any; towers: any[]; onTowersChange: (t: any[]) => void }) {
-  const [selectedFilter, setSelectedFilter] = useState("Todos");
-  const [selectedMarker, setSelectedMarker] = useState<IncidentMarker | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedToast, setSavedToast] = useState(false);
-
-  const handleSelectMarker = useCallback((marker: IncidentMarker) => {
-    setSelectedMarker(marker);
-  }, []);
+  const [entrance, setEntrance] = useState({ lat: -33.3298, lng: -70.7630 });
 
   const canEdit = currentRole?.permissions?.canViewStats || currentRole?.role === "super_admin" || currentRole?.role === "admin";
 
   const handlePositionChange = useCallback(async (id: string, lat: number, lng: number) => {
-    /* Update local state immediately for smooth UX */
     onTowersChange(towers.map((t: any) => (t.id === id ? { ...t, lat, lng } : t)));
-
-    /* Persist to API */
     try {
       setSaving(true);
       await fetch("/api/towers", {
@@ -998,17 +979,21 @@ function MapTab({ currentRole, towers, onTowersChange }: { currentRole: any; tow
       });
       setSavedToast(true);
       setTimeout(() => setSavedToast(false), 2500);
-    } catch {
-      // silent fail — local state is already updated
-    } finally {
+    } catch { /* silent */ } finally {
       setSaving(false);
     }
   }, [towers, onTowersChange]);
 
+  const handleEntranceChange = useCallback((lat: number, lng: number) => {
+    setEntrance({ lat, lng });
+    setSavedToast(true);
+    setTimeout(() => setSavedToast(false), 2500);
+  }, []);
+
   return (
     <div className="space-y-0 pb-4 animate-fade-in">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-slate-900">Mapa de Incidentes</h1>
+        <h1 className="text-xl font-bold text-slate-900">Mapa del Condominio</h1>
         <div className="flex items-center gap-2">
           {canEdit && (
             <button
@@ -1020,61 +1005,28 @@ function MapTab({ currentRole, towers, onTowersChange }: { currentRole: any; tow
               }`}
             >
               {editMode ? (
-                <>
-                  <Check className="w-3.5 h-3.5" /> Terminar
-                </>
+                <><Check className="w-3.5 h-3.5" /> Terminar</>
               ) : (
-                <>
-                  <Pencil className="w-3.5 h-3.5" /> Editar ubicaciones
-                </>
+                <><Pencil className="w-3.5 h-3.5" /> Editar mapa</>
               )}
             </button>
           )}
-          <button className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center shadow-sm"><Filter className="w-5 h-5 text-slate-600" /></button>
         </div>
       </div>
       {editMode && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mt-2 flex items-center gap-2">
           <Pencil className="w-4 h-4 text-amber-600 flex-shrink-0" />
-          <p className="text-[11px] text-amber-800 font-medium">Modo edición activo — Arrastra los marcadores rojos para reposicionar cada condominio. Los cambios se guardan automáticamente.</p>
+          <p className="text-[11px] text-amber-800 font-medium">Arrastra los marcadores rojos para reposicionar cada barrio y la entrada. Los cambios se guardan automáticamente.</p>
         </div>
       )}
-      <div className="relative h-[380px] rounded-2xl overflow-hidden shadow-sm border border-slate-200 mt-3">
+      <div className="relative h-[420px] rounded-2xl overflow-hidden shadow-sm border border-slate-200 mt-3">
         <MapView
-          incidents={incidentMarkers}
-          filter={selectedFilter}
-          onSelectMarker={handleSelectMarker}
           condominios={towers.map((t: any) => ({ id: t.id, name: t.name, type: t.type, lat: t.lat, lng: t.lng }))}
           editMode={editMode}
           onPositionChange={handlePositionChange}
+          entrance={entrance}
+          onEntranceChange={handleEntranceChange}
         />
-        {/* Legend overlay */}
-        {!editMode && (
-          <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm rounded-xl p-2.5 shadow-lg space-y-1.5 z-[1000]">
-            <p className="text-[10px] font-semibold text-slate-700">Leyenda</p>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded bg-emerald-600 border border-white shadow" />
-              <span className="text-[10px] text-slate-500">Casas</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded bg-blue-700 border border-white shadow" />
-              <span className="text-[10px] text-slate-500">Deptos</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-full bg-red-600" />
-              <span className="text-[10px] text-slate-500">Crítico</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-full bg-orange-500" />
-              <span className="text-[10px] text-slate-500">Advertencia</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-full bg-blue-500" />
-              <span className="text-[10px] text-slate-500">Info</span>
-            </div>
-          </div>
-        )}
-        {/* Saving toast */}
         {saving && (
           <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-sm rounded-xl px-4 py-2 shadow-lg z-[1000] flex items-center gap-2">
             <div className="w-4 h-4 border-2 border-[#0f4c81] border-t-transparent rounded-full animate-spin" />
@@ -1088,33 +1040,6 @@ function MapTab({ currentRole, towers, onTowersChange }: { currentRole: any; tow
           </div>
         )}
       </div>
-      <div className="flex gap-2 overflow-x-auto py-3 scrollbar-hide">
-        {MAP_FILTERS.map((f) => (
-          <button key={f} onClick={() => setSelectedFilter(f)} className={`px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all active:scale-95 ${selectedFilter === f ? "bg-[#0f4c81] text-white shadow-md" : "bg-white border border-slate-200 text-slate-600"}`}>{f}</button>
-        ))}
-      </div>
-      {selectedMarker && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setSelectedMarker(null)} />
-          <div className="relative bg-white rounded-t-3xl w-full max-w-md p-6 pb-8 space-y-3 animate-slide-up">
-            <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto" />
-            <div className="flex items-start gap-3">
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: getSeverityColor(selectedMarker.severity) + "15" }}>
-                <AlertTriangle className="w-6 h-6" style={{ color: getSeverityColor(selectedMarker.severity) }} />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-base font-bold text-slate-900">{selectedMarker.title}</h3>
-                <p className="text-sm text-slate-500 mt-0.5">{selectedMarker.description}</p>
-                <div className="flex items-center gap-3 mt-2">
-                  <span className="text-[11px] text-slate-400 flex items-center gap-1"><Clock className="w-3 h-3" /> {selectedMarker.time}</span>
-                  <span className="text-[11px] text-slate-400 flex items-center gap-1"><MapPin className="w-3 h-3" /> {selectedMarker.distance}</span>
-                </div>
-              </div>
-            </div>
-            <Button className="w-full bg-[#0f4c81] hover:bg-[#0a3a63] text-white rounded-xl">Ver detalles completos</Button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
