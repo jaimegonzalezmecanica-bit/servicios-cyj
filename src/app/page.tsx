@@ -961,7 +961,15 @@ function ReportTab({
    TAB 3: MAP (Leaflet)
    ═══════════════════════════════════════════════════════════ */
 
-function MapTab({ currentRole, towers, onTowersChange }: { currentRole: any; towers: any[]; onTowersChange: (t: any[]) => void }) {
+export interface SOSData {
+  lat: number;
+  lng: number;
+  userName: string;
+  conjunto: string;
+  time: string;
+}
+
+function MapTab({ currentRole, towers, onTowersChange, sosAlert }: { currentRole: any; towers: any[]; onTowersChange: (t: any[]) => void; sosAlert?: SOSData | null }) {
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedToast, setSavedToast] = useState(false);
@@ -1168,6 +1176,7 @@ function MapTab({ currentRole, towers, onTowersChange }: { currentRole: any; tow
           perimeter={perimeter}
           onPerimeterChange={handlePerimeterChange}
           perimeterEditMode={perimeterMode}
+          sosAlert={sosAlert}
         />
         {saving && (
           <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-sm rounded-xl px-4 py-2 shadow-lg z-[1000] flex items-center gap-2">
@@ -2505,6 +2514,7 @@ export default function HomePage() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>("home");
   const [sosActive, setSosActive] = useState(false);
+  const [sosAlert, setSosAlert] = useState<{ lat: number; lng: number; userName: string; conjunto: string; time: string } | null>(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [showInstallGuide, setShowInstallGuide] = useState(false);
   const deferredPrompt = useRef<any>(null);
@@ -2601,9 +2611,42 @@ export default function HomePage() {
   const renderTabContent = () => {
     if (!role || !currentUser) return null;
     switch (activeTab) {
-      case "home": return <HomeTab currentUser={currentUser} currentRole={role} alerts={alerts} announcements={announcementsList} onNavigate={handleNavigate} onSOSActivate={() => setSosActive(true)} />;
+      case "home": return <HomeTab currentUser={currentUser} currentRole={role} alerts={alerts} announcements={announcementsList} onNavigate={handleNavigate} onSOSActivate={() => {
+        setSosActive(true);
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              setSosAlert({
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude,
+                userName: currentUser?.name || "Residente",
+                conjunto: currentUser?.conjunto || "",
+                time: new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
+              });
+            },
+            () => {
+              setSosAlert({
+                lat: -33.3298,
+                lng: -70.7630,
+                userName: currentUser?.name || "Residente",
+                conjunto: currentUser?.conjunto || "",
+                time: new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
+              });
+            },
+            { enableHighAccuracy: true, timeout: 10000 }
+          );
+        } else {
+          setSosAlert({
+            lat: -33.3298,
+            lng: -70.7630,
+            userName: currentUser?.name || "Residente",
+            conjunto: currentUser?.conjunto || "",
+            time: new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }),
+          });
+        }
+      }} />;
       case "report": return <ReportTab onNavigate={handleNavigate} onReportSubmitted={handleReportSubmitted} />;
-      case "map": return <MapTab currentRole={role} towers={towersList} onTowersChange={setTowersList} />;
+      case "map": return <MapTab currentRole={role} towers={towersList} onTowersChange={setTowersList} sosAlert={sosAlert} />;
       case "alerts": return <AlertsTab alerts={alerts} currentRole={role} onAlertsChange={setAlerts} />;
       case "roles": return <RolesTab currentUser={currentUser} currentRole={role} users={users} onUsersChange={setUsers} />;
       case "admin": return <AdminTab currentRole={role} alerts={alerts} announcements={announcementsList} onAnnouncementsChange={setAnnouncementsList} guards={guardsList} onGuardsChange={setGuardsList} towers={towersList} onTowersChange={setTowersList} currentUser={currentUser} />;
@@ -2649,7 +2692,7 @@ export default function HomePage() {
       </div>
 
       {/* SOS Overlay */}
-      {sosActive && <SOSOverlay onCancel={() => setSosActive(false)} />}
+      {sosActive && <SOSOverlay onCancel={() => { setSosActive(false); setSosAlert(null); }} />}
     </div>
   );
 }

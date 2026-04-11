@@ -53,6 +53,7 @@ interface MapViewProps {
   perimeter?: PerimeterPoint[];
   onPerimeterChange?: (points: PerimeterPoint[]) => void;
   perimeterEditMode?: PerimeterEditMode;
+  sosAlert?: { lat: number; lng: number; userName: string; conjunto: string; time: string } | null;
 }
 
 /* localStorage helpers */
@@ -104,12 +105,16 @@ export default function MapView({
   perimeter: perimeterProp,
   onPerimeterChange,
   perimeterEditMode = "none",
+  sosAlert,
 }: MapViewProps) {
   /* ─── Leaflet layer refs ─── */
   const mapRef = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const condominioMarkersRef = useRef<Map<string, L.Marker>>(new Map());
   const entranceMarkerRef = useRef<L.Marker | null>(null);
+  const sosMarkerRef = useRef<L.Marker | null>(null);
+  const sosPulseRef = useRef<L.CircleMarker | null>(null);
+  const sosPulse2Ref = useRef<L.CircleMarker | null>(null);
   const polygonRef = useRef<L.Polygon | null>(null);
   const vertexMarkersRef = useRef<Map<number, L.Marker>>(new Map());
 
@@ -379,6 +384,80 @@ export default function MapView({
     entranceMarkerRef.current = marker;
     return () => { if (entranceMarkerRef.current) { map.removeLayer(entranceMarkerRef.current); entranceMarkerRef.current = null; } };
   }, [currentEntrance, editMode, onEntranceChange]);
+
+  /* ─── SOS ALERT MARKER ─── */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    /* Cleanup previous SOS markers */
+    if (sosMarkerRef.current) { map.removeLayer(sosMarkerRef.current); sosMarkerRef.current = null; }
+    if (sosPulseRef.current) { map.removeLayer(sosPulseRef.current); sosPulseRef.current = null; }
+    if (sosPulse2Ref.current) { map.removeLayer(sosPulse2Ref.current); sosPulse2Ref.current = null; }
+
+    if (!sosAlert) return;
+
+    const { lat, lng, userName, conjunto, time } = sosAlert;
+    const pos: L.LatLngExpression = [lat, lng];
+
+    /* Pulse ring 1 (outer, slower) */
+    sosPulse2Ref.current = L.circleMarker(pos, {
+      radius: 35,
+      color: "#dc2626",
+      weight: 3,
+      opacity: 0.3,
+      fillColor: "#dc2626",
+      fillOpacity: 0.05,
+      interactive: false,
+    }).addTo(map);
+
+    /* Pulse ring 2 (inner, faster) */
+    sosPulseRef.current = L.circleMarker(pos, {
+      radius: 20,
+      color: "#dc2626",
+      weight: 3,
+      opacity: 0.5,
+      fillColor: "#dc2626",
+      fillOpacity: 0.1,
+      interactive: false,
+    }).addTo(map);
+
+    /* SOS marker icon */
+    const sosIcon = L.divIcon({
+      className: "",
+      html: `<div style="position:relative;text-align:center;">
+        <div style="width:50px;height:50px;border-radius:50%;background:rgba(220,38,38,0.15);border:3px solid #dc2626;animation:sos-pulse-ring 1.5s ease-out infinite;"></div>
+        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:32px;height:32px;border-radius:50%;background:#dc2626;box-shadow:0 0 0 4px rgba(220,38,38,0.3),0 2px 12px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;">
+          <span style="color:white;font-size:12px;font-weight:900;letter-spacing:1px;">SOS</span>
+        </div>
+        <div style="margin-top:4px;background:#dc2626;color:white;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:700;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.3);">${userName}${conjunto ? ' - ' + conjunto : ''}</div>
+        <div style="color:#dc2626;font-size:9px;font-weight:600;margin-top:1px;white-space:nowrap;">${time}</div>
+        <style>@keyframes sos-pulse-ring{0%{transform:scale(0.8);opacity:1;}100%{transform:scale(2);opacity:0;}}</style>
+      </div>`,
+      iconSize: [120, 80],
+      iconAnchor: [60, 25],
+    });
+
+    const marker = L.marker(pos, { icon: sosIcon, zIndexOffset: 3000, interactive: false });
+    marker.addTo(map).bindPopup(
+      `<div style="text-align:center;padding:4px;">
+        <strong style="color:#dc2626;font-size:14px;">ALERTA SOS</strong><br>
+        <b>${userName}</b>${conjunto ? ' - Conjunto ' + conjunto : ''}<br>
+        <span style="color:#666;">Hora: ${time}</span><br>
+        <span style="color:#666;font-size:11px;">Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}</span>
+      </div>`
+    );
+    sosMarkerRef.current = marker;
+
+    /* Auto-pan to SOS location */
+    map.flyTo(pos, Math.max(map.getZoom(), 18), { duration: 1 });
+
+    return () => {
+      if (sosMarkerRef.current) { map.removeLayer(sosMarkerRef.current); sosMarkerRef.current = null; }
+      if (sosPulseRef.current) { map.removeLayer(sosPulseRef.current); sosPulseRef.current = null; }
+      if (sosPulse2Ref.current) { map.removeLayer(sosPulse2Ref.current); sosPulse2Ref.current = null; }
+    };
+  }, [sosAlert]);
 
   /* ─── CONDOMINIO MARKERS ─── */
   useEffect(() => {
