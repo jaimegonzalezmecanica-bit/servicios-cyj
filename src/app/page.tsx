@@ -1020,11 +1020,11 @@ function MapTab({ currentRole, towers, onTowersChange, sosAlert }: { currentRole
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ towerId: id, lat, lng }),
       });
-      /* Also save to localStorage as backup (survives server restarts) */
+      /* Also save to permanent position backup (offline-api also does this) */
       try {
-        const saved = JSON.parse(localStorage.getItem("cyj-marker-positions") || "{}");
+        const saved = JSON.parse(localStorage.getItem("cyj_marker_positions") || "{}");
         saved[id] = { lat, lng };
-        localStorage.setItem("cyj-marker-positions", JSON.stringify(saved));
+        localStorage.setItem("cyj_marker_positions", JSON.stringify(saved));
       } catch { /* ignore */ }
       setSavedToast(true);
       setTimeout(() => setSavedToast(false), 2500);
@@ -2575,48 +2575,32 @@ export default function HomePage() {
   const [guardsList, setGuardsList] = useState<GuardOnDuty[]>(mockGuards);
 
   /* ─── STATEFUL TOWERS ─── */
-  const [towersList, setTowersList] = useState<Tower[]>(towers);
+  const [towersList, setTowersList] = useState<Tower[]>(() => {
+    // Initialize with positions from permanent backup (offline-api guarantees this)
+    try {
+      const saved = JSON.parse(localStorage.getItem("cyj_marker_positions") || "{}");
+      if (typeof saved === "object" && saved !== null && Object.keys(saved).length > 0) {
+        return towers.map((t: any) => {
+          if (saved[t.id] && typeof saved[t.id].lat === "number") {
+            return { ...t, lat: saved[t.id].lat, lng: saved[t.id].lng };
+          }
+          return t;
+        });
+      }
+    } catch { /* ignore */ }
+    return towers;
+  });
 
-  /* Load towers from API on mount, then merge localStorage marker positions */
+  /* Load towers from API (offline-api intercepts and ensures positions) */
   useEffect(() => {
     fetch("/api/towers")
       .then((r) => r.json())
       .then((data) => {
         if (data.towers && Array.isArray(data.towers)) {
-          /* Merge any localStorage-saved positions on top */
-          try {
-            const saved = JSON.parse(localStorage.getItem("cyj-marker-positions") || "{}");
-            if (typeof saved === "object" && saved !== null) {
-              const merged = data.towers.map((t: any) => {
-                if (saved[t.id] && typeof saved[t.id].lat === "number") {
-                  return { ...t, lat: saved[t.id].lat, lng: saved[t.id].lng };
-                }
-                return t;
-              });
-              setTowersList(merged);
-            } else {
-              setTowersList(data.towers);
-            }
-          } catch {
-            setTowersList(data.towers);
-          }
+          setTowersList(data.towers);
         }
       })
-      .catch(() => {
-        /* API failed: load static data + localStorage positions */
-        try {
-          const saved = JSON.parse(localStorage.getItem("cyj-marker-positions") || "{}");
-          if (typeof saved === "object" && saved !== null && Object.keys(saved).length > 0) {
-            const merged = towers.map((t: any) => {
-              if (saved[t.id] && typeof saved[t.id].lat === "number") {
-                return { ...t, lat: saved[t.id].lat, lng: saved[t.id].lng };
-              }
-              return t;
-            });
-            setTowersList(merged);
-          }
-        } catch { /* use static data as-is */ }
-      });
+      .catch(() => { /* use initialized state */ });
   }, []);
 
   /* PWA install prompt */

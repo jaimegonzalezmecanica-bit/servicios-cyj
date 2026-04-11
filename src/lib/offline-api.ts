@@ -22,7 +22,29 @@ const KEYS = {
   guards: "cyj_offline_guards",
   profile: "cyj_offline_profile",
   initialized: "cyj_offline_init",
+  markerPositions: "cyj_marker_positions",
 };
+
+/* ── PERMANENT FIXED POSITIONS (never change unless admin edits) ── */
+const FIXED_POSITIONS: Record<string, { lat: number; lng: number }> = {
+  faisanes:   { lat: -33.3258, lng: -70.7618 },
+  garzas:     { lat: -33.3262, lng: -70.7628 },
+  flamencos:  { lat: -33.3264, lng: -70.7642 },
+  gaviotas:   { lat: -33.3274, lng: -70.7638 },
+  becacinas:  { lat: -33.3278, lng: -70.7625 },
+  bandurrias: { lat: -33.3285, lng: -70.7635 },
+  albatros:   { lat: -33.3288, lng: -70.7618 },
+  canquen:    { lat: -33.3294, lng: -70.7630 },
+};
+
+const FIXED_ENTRANCE = { lat: -33.3298, lng: -70.7630 };
+
+const FIXED_PERIMETER = [
+  { lat: -33.3250, lng: -70.7610 },
+  { lat: -33.3250, lng: -70.7650 },
+  { lat: -33.3298, lng: -70.7650 },
+  { lat: -33.3298, lng: -70.7610 },
+];
 
 function getLocal<T>(key: string): T[] {
   try {
@@ -50,11 +72,22 @@ export function initOfflineData(): void {
     password: "cyj2025",
   }));
 
+  // Seed towers with FIXED positions baked in (never generic defaults)
+  const towersWithPositions: Conjunto[] = initialTowers.map((t) => ({
+    ...t,
+    lat: FIXED_POSITIONS[t.id]?.lat ?? t.lat,
+    lng: FIXED_POSITIONS[t.id]?.lng ?? t.lng,
+  }));
+
   setLocal(KEYS.users, usersWithPass);
   setLocal(KEYS.alerts, mockAlerts);
-  setLocal(KEYS.towers, initialTowers);
+  setLocal(KEYS.towers, towersWithPositions);
   setLocal(KEYS.announcements, initialAnnouncements);
   setLocal(KEYS.guards, initialGuards);
+
+  // Save fixed positions as permanent backup (never overwritten by defaults)
+  localStorage.setItem(KEYS.markerPositions, JSON.stringify(FIXED_POSITIONS));
+
   localStorage.setItem(KEYS.initialized, "true");
 }
 
@@ -177,7 +210,24 @@ function handleTowers(method: string, body: Record<string, unknown>): Response {
   const towers = getLocal<Conjunto>(KEYS.towers);
 
   if (method === "GET") {
-    return jsonResponse({ towers });
+    // ALWAYS ensure positions are present — merge with permanent backup
+    let savedPositions: Record<string, { lat: number; lng: number }> = {};
+    try {
+      const raw = localStorage.getItem(KEYS.markerPositions);
+      if (raw) savedPositions = JSON.parse(raw);
+    } catch { /* ignore */ }
+
+    const ensuredTowers = towers.map((t) => {
+      if (savedPositions[t.id]) {
+        return { ...t, lat: savedPositions[t.id].lat, lng: savedPositions[t.id].lng };
+      }
+      if (FIXED_POSITIONS[t.id]) {
+        return { ...t, lat: FIXED_POSITIONS[t.id].lat, lng: FIXED_POSITIONS[t.id].lng };
+      }
+      return t;
+    });
+
+    return jsonResponse({ towers: ensuredTowers });
   }
 
   if (method === "POST") {
@@ -205,6 +255,16 @@ function handleTowers(method: string, body: Record<string, unknown>): Response {
     const { towerId: _tid, ...updates } = body;
     towers[idx] = { ...towers[idx], ...updates };
     setLocal(KEYS.towers, towers);
+
+    // Also update permanent position backup when lat/lng changes
+    if (updates.lat !== undefined && updates.lng !== undefined) {
+      try {
+        const saved = JSON.parse(localStorage.getItem(KEYS.markerPositions) || "{}");
+        saved[towerId] = { lat: Number(updates.lat), lng: Number(updates.lng) };
+        localStorage.setItem(KEYS.markerPositions, JSON.stringify(saved));
+      } catch { /* ignore */ }
+    }
+
     return jsonResponse({ success: true, tower: towers[idx] });
   }
 
@@ -349,6 +409,36 @@ export function enableOfflineMode(): void {
         }
     }
   };
+}
+
+/* ── Position Guardian: ensures positions are NEVER lost ── */
+function guardPositions(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEYS.markerPositions) || "{}");
+    // If saved positions are empty or missing, restore from FIXED_POSITIONS
+    if (Object.keys(saved).length === 0) {
+      localStorage.setItem(KEYS.markerPositions, JSON.stringify(FIXED_POSITIONS));
+    }
+    // Also verify each known barrio has a position
+    let needsUpdate = false;
+    for (const [id, pos] of Object.entries(FIXED_POSITIONS)) {
+      if (!saved[id]) {
+        saved[id] = pos;
+        needsUpdate = true;
+      }
+    }
+    if (needsUpdate) {
+      localStorage.setItem(KEYS.markerPositions, JSON.stringify(saved));
+    }
+  } catch { /* ignore */ }
+}
+
+// Run guardian on every enableOfflineMode call
+if (typeof window !== "undefined") {
+  guardPositions();
+  // Also run periodically (every 5 seconds) to catch any data loss
+  setInterval(guardPositions, 5000);
 }
 
 // ── Utility to reset all offline data ──
