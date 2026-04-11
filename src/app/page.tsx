@@ -270,7 +270,7 @@ function InstallGuide({ onClose }: { onClose: () => void }) {
               <div className="w-6 h-6 bg-green-600 text-white rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">4</div>
               <div>
                 <p className="text-sm font-semibold text-slate-800">Listo!</p>
-p className="text-xs text-slate-500 mt-0.5">La app aparecera en tu pantalla principal como cualquier otra app</p>
+<p className="text-xs text-slate-500 mt-0.5">La app aparecera en tu pantalla principal como cualquier otra app</p>
               </div>
             </div>
           </div>
