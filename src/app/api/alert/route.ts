@@ -29,8 +29,8 @@ export async function POST(request: NextRequest) {
       priority: (priority || "medium") as "low" | "medium" | "high" | "critical",
       comments: 0,
       isAnonymous: isAnonymous || false,
-      lat: -33.2670,
-      lng: -70.7530,
+      lat: -33.3276,
+      lng: -70.7630,
       photo: photo || null,
     };
 

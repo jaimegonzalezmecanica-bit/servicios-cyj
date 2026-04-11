@@ -8,31 +8,31 @@ import type { IncidentMarker } from "@/lib/mock-data";
 /*
   Condominio Laguna Norte
   Av. La Montaña Norte 3650, Valle Grande, Lampa, Chile
-  Approximate center coordinates
+  Exact coordinates from maptons.com
 */
-const MAP_CENTER: L.LatLngExpression = [-33.2670, -70.7530];
+const MAP_CENTER: L.LatLngExpression = [-33.3276, -70.7630];
 const MAP_ZOOM = 16;
 
 /* Tower positions spread around the condominium grounds */
 const TOWER_POSITIONS: Record<string, L.LatLngExpression> = {
-  A: [-33.2655, -70.7505],
-  B: [-33.2655, -70.7515],
-  C: [-33.2665, -70.7525],
-  D: [-33.2675, -70.7515],
-  E: [-33.2680, -70.7505],
-  F: [-33.2670, -70.7540],
+  A: [-33.3262, -70.7606],
+  B: [-33.3262, -70.7616],
+  C: [-33.3272, -70.7626],
+  D: [-33.3282, -70.7616],
+  E: [-33.3288, -70.7606],
+  F: [-33.3276, -70.7642],
 };
 
 /* Incident positions relative to towers */
 const INCIDENT_POSITIONS: Record<string, L.LatLngExpression> = {
-  m1: [-33.2658, -70.7512],
-  m2: [-33.2660, -70.7518],
-  m3: [-33.2678, -70.7510],
-  m4: [-33.2682, -70.7518],
-  m5: [-33.2675, -70.7522],
-  m6: [-33.2660, -70.7528],
-  m7: [-33.2662, -70.7508],
-  m8: [-33.2685, -70.7535],
+  m1: [-33.3265, -70.7613],
+  m2: [-33.3268, -70.7619],
+  m3: [-33.3285, -70.7611],
+  m4: [-33.3289, -70.7619],
+  m5: [-33.3282, -70.7623],
+  m6: [-33.3267, -70.7629],
+  m7: [-33.3269, -70.7609],
+  m8: [-33.3292, -70.7637],
 };
 
 function getSeverityColor(severity: string): string {
@@ -109,10 +109,10 @@ export default function MapView({ incidents, filter, onSelectMarker }: MapViewPr
 
     /* Condominium perimeter (approximate geofence for Laguna Norte) */
     const perimeter = [
-      [-33.2640, -70.7490],
-      [-33.2640, -70.7555],
-      [-33.2695, -70.7555],
-      [-33.2695, -70.7490],
+      [-33.3245, -70.7590],
+      [-33.3245, -70.7660],
+      [-33.3305, -70.7660],
+      [-33.3305, -70.7590],
     ];
     L.polygon(perimeter, {
       color: "#0f4c81",
@@ -161,7 +161,7 @@ export default function MapView({ incidents, filter, onSelectMarker }: MapViewPr
       iconAnchor: [30, 10],
     });
 
-    L.marker([-33.2690, -70.7522], { icon: entranceIcon })
+    L.marker([-33.3300, -70.7625], { icon: entranceIcon })
       .addTo(map)
       .bindPopup("<strong>Acceso Principal</strong><br>Av. La Montaña Norte 3650");
 
