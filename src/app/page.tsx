@@ -78,7 +78,10 @@ import {
   roleDistribution,
   towers,
   guardsOnDuty,
-  announcements,
+  announcements as mockAnnouncements,
+  type Announcement,
+  guardsOnDuty as mockGuards,
+  type GuardOnDuty,
   type Alert,
   type IncidentMarker,
   type RoleId,
@@ -819,6 +822,30 @@ function ReportTab({
   const [priority, setPriority] = useState("medium");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoBase64, setPhotoBase64] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "Archivo muy grande", description: "Máximo 5 MB.", variant: "destructive" });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setPhotoPreview(reader.result as string);
+      setPhotoBase64(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemovePhoto = () => {
+    setPhotoPreview(null);
+    setPhotoBase64(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
 
   const handleSubmit = async () => {
     if (!selectedCategory) { toast({ title: "Selecciona una categoría", description: "Debes elegir el tipo de incidente.", variant: "destructive" }); return; }
@@ -879,11 +906,21 @@ function ReportTab({
       </div>
       <div className="space-y-2">
         <Label className="text-sm font-semibold text-slate-700">Evidencia fotográfica</Label>
-        <button className="w-full border-2 border-dashed border-slate-200 rounded-xl p-6 flex flex-col items-center gap-2 active:bg-slate-50 transition-colors">
-          <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center"><Camera className="w-6 h-6 text-slate-400" /></div>
-          <span className="text-sm font-medium text-slate-500">Agregar foto</span>
-          <span className="text-[10px] text-slate-400">Toma una foto o selecciona de la galería</span>
-        </button>
+        <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoSelect} />
+        {photoPreview ? (
+          <div className="relative rounded-xl overflow-hidden border border-slate-200">
+            <img src={photoPreview} alt="Evidencia" className="w-full h-40 object-cover" />
+            <button onClick={handleRemovePhoto} className="absolute top-2 right-2 w-7 h-7 bg-red-500 rounded-full flex items-center justify-center text-white shadow-lg active:scale-95">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <button onClick={() => fileInputRef.current?.click()} className="w-full border-2 border-dashed border-slate-200 rounded-xl p-6 flex flex-col items-center gap-2 active:bg-slate-50 transition-colors">
+            <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center"><Camera className="w-6 h-6 text-slate-400" /></div>
+            <span className="text-sm font-medium text-slate-500">Agregar foto</span>
+            <span className="text-[10px] text-slate-400">Toma una foto o selecciona de la galería</span>
+          </button>
+        )}
       </div>
       <div className="flex items-center justify-between bg-white rounded-xl border border-slate-200 p-4">
         <div>
@@ -1445,7 +1482,115 @@ function RolesTab({
    TAB 6: ADMIN (Admin/Comité/Super Admin)
    ═══════════════════════════════════════════════════════════ */
 
-function AdminTab({ currentRole, alerts }: { currentRole: Role; alerts: Alert[] }) {
+function AdminTab({
+  currentRole,
+  alerts,
+  announcements,
+  onAnnouncementsChange,
+  guards,
+  onGuardsChange,
+  currentUser,
+}: {
+  currentRole: Role;
+  alerts: Alert[];
+  announcements: Announcement[];
+  onAnnouncementsChange: (a: Announcement[]) => void;
+  guards: GuardOnDuty[];
+  onGuardsChange: (g: GuardOnDuty[]) => void;
+  currentUser: UserProfile;
+}) {
+  const { toast } = useToast();
+
+  /* ─── Announcement state ─── */
+  const [showCreateAnnouncement, setShowCreateAnnouncement] = useState(false);
+  const [annTitle, setAnnTitle] = useState("");
+  const [annDescription, setAnnDescription] = useState("");
+  const [annPriority, setAnnPriority] = useState<"info" | "warning" | "important">("info");
+  const [annSubmitting, setAnnSubmitting] = useState(false);
+
+  /* ─── Guard shift state ─── */
+  const [showAssignShift, setShowAssignShift] = useState(false);
+  const [shiftName, setShiftName] = useState("");
+  const [shiftType, setShiftType] = useState("Turno Mañana");
+  const [shiftStart, setShiftStart] = useState("07:00");
+  const [shiftEnd, setShiftEnd] = useState("15:00");
+  const [shiftZone, setShiftZone] = useState("Torres A-B");
+  const [shiftPhone, setShiftPhone] = useState("");
+  const [shiftSubmitting, setShiftSubmitting] = useState(false);
+
+  /* ─── Create Announcement ─── */
+  const handleCreateAnnouncement = async () => {
+    if (!annTitle.trim()) { toast({ title: "Título requerido", variant: "destructive" }); return; }
+    if (!annDescription.trim()) { toast({ title: "Descripción requerida", variant: "destructive" }); return; }
+    setAnnSubmitting(true);
+    try {
+      const res = await fetch("/api/announcements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: annTitle.trim(), description: annDescription.trim(), priority: annPriority, author: currentUser.name }),
+      });
+      const data = await res.json();
+      if (data.success && data.announcement) {
+        onAnnouncementsChange([data.announcement, ...announcements]);
+        toast({ title: "Anuncio creado", description: "El anuncio ha sido publicado exitosamente." });
+        setAnnTitle(""); setAnnDescription(""); setAnnPriority("info");
+        setShowCreateAnnouncement(false);
+      } else {
+        toast({ title: "Error", description: data.error || "No se pudo crear el anuncio.", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Error", description: "No se pudo crear el anuncio.", variant: "destructive" });
+    } finally {
+      setAnnSubmitting(false);
+    }
+  };
+
+  /* ─── Assign Guard Shift ─── */
+  const handleAssignShift = async () => {
+    if (!shiftName.trim()) { toast({ title: "Nombre requerido", variant: "destructive" }); return; }
+    if (!shiftStart || !shiftEnd) { toast({ title: "Horario requerido", variant: "destructive" }); return; }
+    if (!shiftZone.trim()) { toast({ title: "Zona requerida", variant: "destructive" }); return; }
+    setShiftSubmitting(true);
+    try {
+      const res = await fetch("/api/guards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: shiftName.trim(), shift: shiftType, startTime: shiftStart, endTime: shiftEnd, zone: shiftZone, phone: shiftPhone.trim() }),
+      });
+      const data = await res.json();
+      if (data.success && data.guard) {
+        onGuardsChange([...guards, data.guard]);
+        toast({ title: "Turno asignado", description: `Se ha asignado turno a ${data.guard.name}.` });
+        setShiftName(""); setShiftType("Turno Mañana"); setShiftStart("07:00"); setShiftEnd("15:00"); setShiftZone("Torres A-B"); setShiftPhone("");
+        setShowAssignShift(false);
+      } else {
+        toast({ title: "Error", description: data.error || "No se pudo asignar el turno.", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Error", description: "No se pudo asignar el turno.", variant: "destructive" });
+    } finally {
+      setShiftSubmitting(false);
+    }
+  };
+
+  /* ─── Remove Guard ─── */
+  const handleRemoveGuard = async (guardId: string) => {
+    try {
+      const res = await fetch("/api/guards", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ guardId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        onGuardsChange(guards.filter((g) => g.id !== guardId));
+        toast({ title: "Turno eliminado", description: "El turno ha sido removido." });
+      }
+    } catch {
+      toast({ title: "Error", description: "No se pudo eliminar el turno.", variant: "destructive" });
+    }
+  };
+
   return (
     <div className="space-y-5 pb-4 animate-fade-in">
       <div>
@@ -1458,8 +1603,8 @@ function AdminTab({ currentRole, alerts }: { currentRole: Role; alerts: Alert[] 
         <div className="grid grid-cols-2 gap-3">
           {[
             { label: "Total Residentes", value: String(communityStats.totalMembers), color: "bg-[#0f4c81]/5 text-[#0f4c81]", icon: Users },
-            { label: "Guardias Activos", value: `${communityStats.guardsOnDuty}/12`, color: "bg-green-50 text-green-700", icon: Shield },
-            { label: "Alertas Hoy", value: "15", color: "bg-amber-50 text-amber-700", icon: AlertCircle },
+            { label: "Guardias Activos", value: `${guards.length}/12`, color: "bg-green-50 text-green-700", icon: Shield },
+            { label: "Alertas Hoy", value: String(alerts.filter((a) => a.status === "activa").length), color: "bg-amber-50 text-amber-700", icon: AlertCircle },
             { label: "Reportes Pendientes", value: String(communityStats.pendingReports), color: "bg-red-50 text-red-700", icon: FileText },
           ].map((s) => (
             <div key={s.label} className={`${s.color} rounded-xl p-4`}>
@@ -1501,24 +1646,38 @@ function AdminTab({ currentRole, alerts }: { currentRole: Role; alerts: Alert[] 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-slate-900">Guardias</h2>
-            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs h-7">
+            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs h-7" onClick={() => setShowAssignShift(true)}>
               <Plus className="w-3 h-3 mr-1" /> Asignar Turno
             </Button>
           </div>
-          <div className="space-y-2">
-            {guardsOnDuty.map((g) => (
-              <div key={g.id} className="bg-white rounded-xl border border-slate-200 p-3 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center text-green-700">
-                  <BadgeCheck className="w-5 h-5" />
+          {guards.length === 0 ? (
+            <div className="flex flex-col items-center py-8 gap-2">
+              <Shield className="w-8 h-8 text-slate-300" />
+              <p className="text-sm text-slate-400">No hay guardias asignados</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {guards.map((g) => (
+                <div key={g.id} className="bg-white rounded-xl border border-slate-200 p-3 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center text-green-700">
+                    <BadgeCheck className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-900 truncate">{g.name}</p>
+                    <p className="text-[11px] text-slate-400">{g.shift} • {g.startTime} - {g.endTime}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{g.zone}</span>
+                    {currentRole.permissions.canManageRoles && (
+                      <button onClick={() => handleRemoveGuard(g.id)} className="w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center active:bg-red-100">
+                        <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-slate-900 truncate">{g.name}</p>
-                  <p className="text-[11px] text-slate-400">{g.shift} • {g.startTime} - {g.endTime}</p>
-                </div>
-                <span className="text-[10px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{g.zone}</span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -1553,23 +1712,135 @@ function AdminTab({ currentRole, alerts }: { currentRole: Role; alerts: Alert[] 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-slate-900">Anuncios</h2>
-            <Button size="sm" className="bg-[#0f4c81] hover:bg-[#0a3a63] text-white rounded-lg text-xs h-7">
+            <Button size="sm" className="bg-[#0f4c81] hover:bg-[#0a3a63] text-white rounded-lg text-xs h-7" onClick={() => setShowCreateAnnouncement(true)}>
               <Plus className="w-3 h-3 mr-1" /> Crear
             </Button>
           </div>
-          <div className="space-y-2">
-            {announcements.map((a) => (
-              <div key={a.id} className="bg-white rounded-xl border border-slate-200 p-3 space-y-1">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-slate-900 truncate">{a.title}</p>
-                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${a.priority === "important" ? "bg-red-100 text-red-700" : a.priority === "warning" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
-                    {a.priority === "important" ? "Importante" : a.priority === "warning" ? "Aviso" : "Info"}
-                  </span>
+          {announcements.length === 0 ? (
+            <div className="flex flex-col items-center py-8 gap-2">
+              <Megaphone className="w-8 h-8 text-slate-300" />
+              <p className="text-sm text-slate-400">No hay anuncios</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {announcements.map((a) => (
+                <div key={a.id} className="bg-white rounded-xl border border-slate-200 p-3 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-slate-900 truncate">{a.title}</p>
+                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${a.priority === "important" ? "bg-red-100 text-red-700" : a.priority === "warning" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
+                      {a.priority === "important" ? "Importante" : a.priority === "warning" ? "Aviso" : "Info"}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 line-clamp-2">{a.description}</p>
+                  <p className="text-[10px] text-slate-400">{a.author} • {a.date}</p>
                 </div>
-                <p className="text-[11px] text-slate-500 line-clamp-2">{a.description}</p>
-                <p className="text-[10px] text-slate-400">{a.author} • {a.date}</p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ═══ CREATE ANNOUNCEMENT MODAL ═══ */}
+      {showCreateAnnouncement && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowCreateAnnouncement(false)} />
+          <div className="relative bg-white rounded-t-3xl w-full max-w-md p-6 pb-8 space-y-4 animate-slide-up max-h-[85vh] overflow-y-auto">
+            <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto" />
+            <h3 className="text-lg font-bold text-slate-900">Crear Anuncio</h3>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-600">Título *</Label>
+                <Input value={annTitle} onChange={(e) => setAnnTitle(e.target.value)} placeholder="Ej: Mantención programada" className="rounded-xl h-11" />
               </div>
-            ))}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-600">Descripción *</Label>
+                <Textarea value={annDescription} onChange={(e) => setAnnDescription(e.target.value)} placeholder="Describe el anuncio..." className="min-h-[80px] rounded-xl resize-none" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-600">Prioridad</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { value: "info" as const, label: "Info", color: "bg-blue-100 text-blue-700 border-blue-200" },
+                    { value: "warning" as const, label: "Aviso", color: "bg-amber-100 text-amber-700 border-amber-200" },
+                    { value: "important" as const, label: "Importante", color: "bg-red-100 text-red-700 border-red-200" },
+                  ]).map((p) => (
+                    <button key={p.value} onClick={() => setAnnPriority(p.value)} className={`py-2 rounded-xl text-xs font-semibold border-2 transition-all active:scale-95 ${annPriority === p.value ? p.color : "border-slate-200 bg-white text-slate-500"}`}>{p.label}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Button onClick={handleCreateAnnouncement} disabled={annSubmitting} className="w-full bg-[#0f4c81] hover:bg-[#0a3a63] text-white rounded-xl h-11">
+                {annSubmitting ? "Publicando..." : "Publicar Anuncio"}
+              </Button>
+              <Button variant="outline" onClick={() => setShowCreateAnnouncement(false)} className="w-full rounded-xl">Cancelar</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ ASSIGN GUARD SHIFT MODAL ═══ */}
+      {showAssignShift && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowAssignShift(false)} />
+          <div className="relative bg-white rounded-t-3xl w-full max-w-md p-6 pb-8 space-y-4 animate-slide-up max-h-[85vh] overflow-y-auto">
+            <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto" />
+            <h3 className="text-lg font-bold text-slate-900">Asignar Turno de Guardia</h3>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-600">Nombre del guardia *</Label>
+                <Input value={shiftName} onChange={(e) => setShiftName(e.target.value)} placeholder="Ej: Juan Pérez" className="rounded-xl h-11" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-600">Tipo de turno</Label>
+                <Select value={shiftType} onValueChange={setShiftType}>
+                  <SelectTrigger className="w-full rounded-xl h-11">
+                    <SelectValue placeholder="Seleccionar turno" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Turno Mañana">Turno Mañana (07:00-15:00)</SelectItem>
+                    <SelectItem value="Turno Tarde">Turno Tarde (15:00-23:00)</SelectItem>
+                    <SelectItem value="Turno Noche">Turno Noche (23:00-07:00)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-slate-600">Hora inicio *</Label>
+                  <Input type="time" value={shiftStart} onChange={(e) => setShiftStart(e.target.value)} className="rounded-xl h-11" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-slate-600">Hora fin *</Label>
+                  <Input type="time" value={shiftEnd} onChange={(e) => setShiftEnd(e.target.value)} className="rounded-xl h-11" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-600">Zona *</Label>
+                <Select value={shiftZone} onValueChange={setShiftZone}>
+                  <SelectTrigger className="w-full rounded-xl h-11">
+                    <SelectValue placeholder="Seleccionar zona" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Torres A-B">Torres A-B</SelectItem>
+                    <SelectItem value="Torres C-D">Torres C-D</SelectItem>
+                    <SelectItem value="Torres E-F">Torres E-F</SelectItem>
+                    <SelectItem value="Acceso Principal">Acceso Principal</SelectItem>
+                    <SelectItem value="Estacionamiento">Estacionamiento</SelectItem>
+                    <SelectItem value="Perímetro">Perímetro Completo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-600">Teléfono</Label>
+                <Input value={shiftPhone} onChange={(e) => setShiftPhone(e.target.value)} placeholder="+56 9 1234 5678" className="rounded-xl h-11" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Button onClick={handleAssignShift} disabled={shiftSubmitting} className="w-full bg-green-600 hover:bg-green-700 text-white rounded-xl h-11">
+                {shiftSubmitting ? "Asignando..." : "Asignar Turno"}
+              </Button>
+              <Button variant="outline" onClick={() => setShowAssignShift(false)} className="w-full rounded-xl">Cancelar</Button>
+            </div>
           </div>
         </div>
       )}
@@ -1821,6 +2092,12 @@ export default function HomePage() {
   /* ─── STATEFUL USERS ─── */
   const [users, setUsers] = useState<SampleUser[]>(sampleUsers);
 
+  /* ─── STATEFUL ANNOUNCEMENTS ─── */
+  const [announcementsList, setAnnouncementsList] = useState<Announcement[]>(mockAnnouncements);
+
+  /* ─── STATEFUL GUARDS ─── */
+  const [guardsList, setGuardsList] = useState<GuardOnDuty[]>(mockGuards);
+
   /* PWA install prompt */
   useEffect(() => {
     const dismissed = localStorage.getItem(INSTALL_DISMISSED_KEY);
@@ -1903,7 +2180,7 @@ export default function HomePage() {
       case "map": return <MapTab />;
       case "alerts": return <AlertsTab alerts={alerts} />;
       case "roles": return <RolesTab currentUser={currentUser} currentRole={role} users={users} onUsersChange={setUsers} />;
-      case "admin": return <AdminTab currentRole={role} alerts={alerts} />;
+      case "admin": return <AdminTab currentRole={role} alerts={alerts} announcements={announcementsList} onAnnouncementsChange={setAnnouncementsList} guards={guardsList} onGuardsChange={setGuardsList} currentUser={currentUser} />;
       case "profile": return <ProfileTab currentUser={currentUser} currentRole={role} onLogout={handleLogout} onSwitchRole={handleSwitchRole} />;
       default: return null;
     }

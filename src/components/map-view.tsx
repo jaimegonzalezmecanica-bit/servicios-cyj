@@ -5,30 +5,34 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { IncidentMarker } from "@/lib/mock-data";
 
-/* Santiago, Chile approximate center for the condominium */
-const MAP_CENTER: L.LatLngExpression = [-33.4489, -70.6693];
+/*
+  Condominio Laguna Norte
+  Av. La Montaña Norte 3650, Valle Grande, Lampa, Chile
+  Approximate center coordinates
+*/
+const MAP_CENTER: L.LatLngExpression = [-33.2670, -70.7530];
 const MAP_ZOOM = 16;
 
-/* Tower positions around the condominium */
+/* Tower positions spread around the condominium grounds */
 const TOWER_POSITIONS: Record<string, L.LatLngExpression> = {
-  A: [-33.4470, -70.6660],
-  B: [-33.4492, -70.6640],
-  C: [-33.4512, -70.6662],
-  D: [-33.4468, -70.6722],
-  E: [-33.4488, -70.6740],
-  F: [-33.4510, -70.6718],
+  A: [-33.2655, -70.7505],
+  B: [-33.2655, -70.7515],
+  C: [-33.2665, -70.7525],
+  D: [-33.2675, -70.7515],
+  E: [-33.2680, -70.7505],
+  F: [-33.2670, -70.7540],
 };
 
 /* Incident positions relative to towers */
 const INCIDENT_POSITIONS: Record<string, L.LatLngExpression> = {
-  m1: [-33.4496, -70.6646],
-  m2: [-33.4490, -70.6644],
-  m3: [-33.4466, -70.6720],
-  m4: [-33.4466, -70.6728],
-  m5: [-33.4484, -70.6724],
-  m6: [-33.4474, -70.6678],
-  m7: [-33.4472, -70.6658],
-  m8: [-33.4514, -70.6712],
+  m1: [-33.2658, -70.7512],
+  m2: [-33.2660, -70.7518],
+  m3: [-33.2678, -70.7510],
+  m4: [-33.2682, -70.7518],
+  m5: [-33.2675, -70.7522],
+  m6: [-33.2660, -70.7528],
+  m7: [-33.2662, -70.7508],
+  m8: [-33.2685, -70.7535],
 };
 
 function getSeverityColor(severity: string): string {
@@ -100,15 +104,15 @@ export default function MapView({ incidents, filter, onSelectMarker }: MapViewPr
 
       L.marker(pos, { icon: towerIcon })
         .addTo(map)
-        .bindPopup(`<strong>Torre ${id}</strong><br>Servicios Integrales CyJ`);
+        .bindPopup(`<strong>Torre ${id}</strong><br>Condominio Laguna Norte<br>Av. La Montaña Norte 3650`);
     });
 
-    /* Condominium perimeter */
+    /* Condominium perimeter (approximate geofence for Laguna Norte) */
     const perimeter = [
-      [-33.4455, -70.6630],
-      [-33.4455, -70.6750],
-      [-33.4525, -70.6750],
-      [-33.4525, -70.6630],
+      [-33.2640, -70.7490],
+      [-33.2640, -70.7555],
+      [-33.2695, -70.7555],
+      [-33.2695, -70.7490],
     ];
     L.polygon(perimeter, {
       color: "#0f4c81",
@@ -117,6 +121,49 @@ export default function MapView({ incidents, filter, onSelectMarker }: MapViewPr
       fillColor: "#0f4c81",
       fillOpacity: 0.05,
     }).addTo(map);
+
+    /* Community label */
+    L.marker(MAP_CENTER, {
+      icon: L.divIcon({
+        className: "",
+        html: `<div style="
+          background: rgba(15,76,129,0.9);
+          color: white;
+          padding: 4px 10px;
+          border-radius: 6px;
+          font-size: 11px;
+          font-weight: 600;
+          white-space: nowrap;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+          border: 1px solid rgba(255,255,255,0.3);
+        ">Condominio Laguna Norte</div>`,
+        iconSize: [180, 24],
+        iconAnchor: [90, 12],
+      }),
+    }).addTo(map);
+
+    /* Main entrance marker */
+    const entranceIcon = L.divIcon({
+      className: "",
+      html: `
+        <div style="
+          background: #16a34a;
+          color: white;
+          border-radius: 6px;
+          padding: 3px 8px;
+          font-size: 10px;
+          font-weight: 700;
+          border: 2px solid white;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        ">ENTRADA</div>
+      `,
+      iconSize: [60, 20],
+      iconAnchor: [30, 10],
+    });
+
+    L.marker([-33.2690, -70.7522], { icon: entranceIcon })
+      .addTo(map)
+      .bindPopup("<strong>Acceso Principal</strong><br>Av. La Montaña Norte 3650");
 
     /* "You are here" marker */
     const userIcon = L.divIcon({
@@ -139,9 +186,9 @@ export default function MapView({ incidents, filter, onSelectMarker }: MapViewPr
       iconAnchor: [12, 12],
     });
 
-    L.marker([-33.4489, -70.6693], { icon: userIcon })
+    L.marker(MAP_CENTER, { icon: userIcon })
       .addTo(map)
-      .bindPopup("<strong>Tú estás aquí</strong>");
+      .bindPopup("<strong>Tú estás aquí</strong><br>Condominio Laguna Norte, Lampa");
 
     mapRef.current = map;
 
