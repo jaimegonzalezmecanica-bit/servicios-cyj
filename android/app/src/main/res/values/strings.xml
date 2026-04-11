@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Servicios Integrales CyJ</string>
+    <string name="title_activity_main">Servicios Integrales CyJ</string>
+    <string name="package_name">cl.cyj.security</string>
+    <string name="custom_url_scheme">cl.cyj.security</string>
+</resources>
