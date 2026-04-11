@@ -146,7 +146,7 @@ export interface UserProfile {
   email: string;
   address: string;
   unit: string;
-  tower: string;
+  conjunto: string;
   reports: number;
   memberSince: string;
   avatarInitial: string;
@@ -170,7 +170,7 @@ export interface SampleUser {
   name: string;
   role: RoleId;
   roleName: string;
-  tower: string;
+  conjunto: string;
   unit: string;
   phone: string;
   email: string;
@@ -191,9 +191,9 @@ export const demoAccounts: UserProfile[] = [
     condo: "Servicios Integrales CyJ",
     phone: "+56 9 1234 5678",
     email: "carlos.perez@email.com",
-    address: "Torre A - Unidad 456",
-    unit: "456",
-    tower: "A",
+    address: "Conjunto Flamencos - Casa 12",
+    unit: "12",
+    conjunto: "flamencos",
     reports: 8,
     memberSince: "2023",
     avatarInitial: "C",
@@ -206,9 +206,9 @@ export const demoAccounts: UserProfile[] = [
     condo: "Servicios Integrales CyJ",
     phone: "+56 9 2345 6789",
     email: "maria.lopez@email.com",
-    address: "Torre B - Unidad 120",
-    unit: "120",
-    tower: "B",
+    address: "Conjunto Canquén - Torre 1, Dpto 201",
+    unit: "201",
+    conjunto: "canquen",
     reports: 15,
     memberSince: "2022",
     avatarInitial: "M",
@@ -223,7 +223,7 @@ export const demoAccounts: UserProfile[] = [
     email: "juan.torres@email.com",
     address: "Guardia Turno A",
     unit: "N/A",
-    tower: "N/A",
+    conjunto: "general",
     reports: 42,
     memberSince: "2021",
     avatarInitial: "J",
@@ -299,55 +299,64 @@ export const roleDistribution = [
 ];
 
 /* ═══════════════════════════════════════════════════════════
-   TOWERS / UNITS
+   CONJUNTOS HABITACIONALES
    ═══════════════════════════════════════════════════════════ */
 
-export interface Tower {
+export interface Conjunto {
   id: string;
   name: string;
-  units: number;
-  floors: number;
-  status: "operativa" | "mantención";
+  type: "casas" | "torres";
+  houses?: number;
+  towersCount?: number;
+  units?: number;
+  floors?: number;
+  status: "operativo" | "mantención";
 }
 
-export const towers: Tower[] = [
-  { id: "A", name: "Torre A", units: 72, floors: 12, status: "operativa" },
-  { id: "B", name: "Torre B", units: 68, floors: 11, status: "operativa" },
-  { id: "C", name: "Torre C", units: 65, floors: 10, status: "operativa" },
-  { id: "D", name: "Torre D", units: 60, floors: 10, status: "mantención" },
-  { id: "E", name: "Torre E", units: 58, floors: 9, status: "operativa" },
-  { id: "F", name: "Torre F", units: 57, floors: 9, status: "operativa" },
+export const conjuntos: Conjunto[] = [
+  { id: "flamencos", name: "Flamencos", type: "casas", status: "operativo" },
+  { id: "faisanes", name: "Faisanes", type: "casas", status: "operativo" },
+  { id: "garzas", name: "Garzas", type: "casas", status: "operativo" },
+  { id: "gaviotas", name: "Gaviotas", type: "casas", status: "operativo" },
+  { id: "becacinas", name: "Becacinas", type: "casas", status: "operativo" },
+  { id: "bandurrias", name: "Bandurrias", type: "casas", status: "operativo" },
+  { id: "albatros", name: "Albatros", type: "casas", status: "operativo" },
+  { id: "canquen", name: "Canquén", type: "torres", towersCount: 2, status: "operativo" },
 ];
+
+// Backward compatibility alias
+export type Tower = Conjunto;
+export const towers = conjuntos;
 
 /* ═══════════════════════════════════════════════════════════
    SAMPLE USERS (for admin panel)
    ═══════════════════════════════════════════════════════════ */
 
 export const sampleUsers: SampleUser[] = [
-  { id: "u1", name: "Roberto Silva Alarcón", role: "super_admin", roleName: "Super Administrador", tower: "A", unit: "101", phone: "+56 9 1111 1111", email: "roberto.silva@cyj.cl", online: true, memberSince: "2021", avatarInitial: "R" },
-  { id: "u2", name: "María López Fernández", role: "admin", roleName: "Administradora", tower: "B", unit: "120", phone: "+56 9 2222 2222", email: "maria.lopez@cyj.cl", online: true, memberSince: "2022", avatarInitial: "M" },
-  { id: "u3", name: "Pedro Contreras Ruiz", role: "admin", roleName: "Administrador", tower: "A", unit: "802", phone: "+56 9 3333 3333", email: "pedro.contreras@cyj.cl", online: false, memberSince: "2022", avatarInitial: "P" },
-  { id: "u4", name: "Ana Martínez Vargas", role: "comite", roleName: "Comité de Seguridad", tower: "C", unit: "305", phone: "+56 9 4444 4444", email: "ana.martinez@cyj.cl", online: true, memberSince: "2022", avatarInitial: "A" },
-  { id: "u5", name: "Luis Ramírez Díaz", role: "comite", roleName: "Comité de Seguridad", tower: "E", unit: "401", phone: "+56 9 5555 5555", email: "luis.ramirez@cyj.cl", online: false, memberSince: "2023", avatarInitial: "L" },
-  { id: "u6", name: "Claudia Herrera Muñoz", role: "comite", roleName: "Comité de Seguridad", tower: "F", unit: "210", phone: "+56 9 6666 6666", email: "claudia.herrera@cyj.cl", online: true, memberSince: "2023", avatarInitial: "C" },
-  { id: "u7", name: "Juan Torres Rivera", role: "guardia", roleName: "Guardia de Seguridad", tower: "N/A", unit: "N/A", phone: "+56 9 7777 7777", email: "juan.torres@cyj.cl", online: true, memberSince: "2021", avatarInitial: "J" },
-  { id: "u8", name: "Miguel Soto Pérez", role: "guardia", roleName: "Guardia de Seguridad", tower: "N/A", unit: "N/A", phone: "+56 9 8888 8888", email: "miguel.soto@cyj.cl", online: true, memberSince: "2022", avatarInitial: "M" },
-  { id: "u9", name: "David Fuentes Castro", role: "guardia", roleName: "Guardia de Seguridad", tower: "N/A", unit: "N/A", phone: "+56 9 9999 9999", email: "david.fuentes@cyj.cl", online: true, memberSince: "2022", avatarInitial: "D" },
-  { id: "u10", name: "Andrés Vidal Espinoza", role: "guardia", roleName: "Guardia de Seguridad", tower: "N/A", unit: "N/A", phone: "+56 9 1010 1010", email: "andres.vidal@cyj.cl", online: false, memberSince: "2023", avatarInitial: "A" },
-  { id: "u11", name: "Carlos Pérez Gutiérrez", role: "residente_p", roleName: "Residente Principal", tower: "A", unit: "456", phone: "+56 9 1234 5678", email: "carlos.perez@email.com", online: true, memberSince: "2023", avatarInitial: "C" },
-  { id: "u12", name: "Valentina Rojas Parra", role: "residente_p", roleName: "Residente Principal", tower: "B", unit: "335", phone: "+56 9 1212 3434", email: "valentina.rojas@email.com", online: true, memberSince: "2022", avatarInitial: "V" },
-  { id: "u13", name: "Francisco Morales Ibañez", role: "residente_p", roleName: "Residente Principal", tower: "C", unit: "508", phone: "+56 9 1313 5353", email: "francisco.morales@email.com", online: false, memberSince: "2021", avatarInitial: "F" },
-  { id: "u14", name: "Camila Núñez Olivera", role: "residente", roleName: "Residente", tower: "A", unit: "220", phone: "+56 9 1414 6464", email: "camila.nunez@email.com", online: true, memberSince: "2023", avatarInitial: "C" },
-  { id: "u15", name: "Diego Pizarro Sepúlveda", role: "residente", roleName: "Residente", tower: "B", unit: "412", phone: "+56 9 1515 7575", email: "diego.pizarro@email.com", online: false, memberSince: "2024", avatarInitial: "D" },
-  { id: "u16", name: "Isabella Castro Godoy", role: "residente", roleName: "Residente", tower: "D", unit: "601", phone: "+56 9 1616 8686", email: "isabella.castro@email.com", online: true, memberSince: "2023", avatarInitial: "I" },
-  { id: "u17", name: "Rosa Elena Gutiérrez", role: "familiar", roleName: "Familiar Autorizado", tower: "A", unit: "456", phone: "+56 9 1717 9797", email: "rosa.gutierrez@email.com", online: false, memberSince: "2023", avatarInitial: "R" },
-  { id: "u18", name: "Felipe Reyes Campos", role: "familiar", roleName: "Familiar Autorizado", tower: "B", unit: "335", phone: "+56 9 1818 0808", email: "felipe.reyes@email.com", online: true, memberSince: "2024", avatarInitial: "F" },
-  { id: "u19", name: "Gabriela Ortega Ríos", role: "familiar", roleName: "Familiar Autorizado", tower: "C", unit: "508", phone: "+56 9 1919 1919", email: "gabriela.ortega@email.com", online: false, memberSince: "2024", avatarInitial: "G" },
-  { id: "u20", name: "Tomás Becker Araya", role: "visitante", roleName: "Visitante Temporal", tower: "-", unit: "-", phone: "+56 9 2020 2020", email: "tomas.becker@email.com", online: true, memberSince: "2024", avatarInitial: "T" },
-  { id: "u21", name: "Patricia Lillo Salazar", role: "residente", roleName: "Residente", tower: "E", unit: "180", phone: "+56 9 2121 2121", email: "patricia.lillo@email.com", online: false, memberSince: "2022", avatarInitial: "P" },
-  { id: "u22", name: "Sebastián Agüero Cortés", role: "residente_p", roleName: "Residente Principal", tower: "F", unit: "425", phone: "+56 9 2222 3232", email: "sebastian.aguero@email.com", online: true, memberSince: "2021", avatarInitial: "S" },
-  { id: "u23", name: "Matías Bravo Quiroz", role: "guardia", roleName: "Guardia de Seguridad", tower: "N/A", unit: "N/A", phone: "+56 9 2323 4343", email: "matias.bravo@cyj.cl", online: true, memberSince: "2023", avatarInitial: "M" },
-  { id: "u24", name: "Javiera Donoso Vega", role: "residente", roleName: "Residente", tower: "D", unit: "315", phone: "+56 9 2424 5454", email: "javiera.donoso@email.com", online: false, memberSince: "2024", avatarInitial: "J" },
+  { id: "u1", name: "Roberto Silva Alarcón", role: "super_admin", roleName: "Super Administrador", conjunto: "flamencos", unit: "1", phone: "+56 9 1111 1111", email: "roberto.silva@cyj.cl", online: true, memberSince: "2021", avatarInitial: "R" },
+  { id: "u2", name: "María López Fernández", role: "admin", roleName: "Administradora", conjunto: "canquen", unit: "201", phone: "+56 9 2222 2222", email: "maria.lopez@cyj.cl", online: true, memberSince: "2022", avatarInitial: "M" },
+  { id: "u3", name: "Pedro Contreras Ruiz", role: "admin", roleName: "Administrador", conjunto: "faisanes", unit: "5", phone: "+56 9 3333 3333", email: "pedro.contreras@cyj.cl", online: false, memberSince: "2022", avatarInitial: "P" },
+  { id: "u4", name: "Ana Martínez Vargas", role: "comite", roleName: "Comité de Seguridad", conjunto: "garzas", unit: "3", phone: "+56 9 4444 4444", email: "ana.martinez@cyj.cl", online: true, memberSince: "2022", avatarInitial: "A" },
+  { id: "u5", name: "Luis Ramírez Díaz", role: "comite", roleName: "Comité de Seguridad", conjunto: "gaviotas", unit: "8", phone: "+56 9 5555 5555", email: "luis.ramirez@cyj.cl", online: false, memberSince: "2023", avatarInitial: "L" },
+  { id: "u6", name: "Claudia Herrera Muñoz", role: "comite", roleName: "Comité de Seguridad", conjunto: "becacinas", unit: "2", phone: "+56 9 6666 6666", email: "claudia.herrera@cyj.cl", online: true, memberSince: "2023", avatarInitial: "C" },
+  { id: "u7", name: "Juan Torres Rivera", role: "guardia", roleName: "Guardia de Seguridad", conjunto: "general", unit: "N/A", phone: "+56 9 7777 7777", email: "juan.torres@cyj.cl", online: true, memberSince: "2021", avatarInitial: "J" },
+  { id: "u8", name: "Miguel Soto Pérez", role: "guardia", roleName: "Guardia de Seguridad", conjunto: "general", unit: "N/A", phone: "+56 9 8888 8888", email: "miguel.soto@cyj.cl", online: true, memberSince: "2022", avatarInitial: "M" },
+  { id: "u9", name: "David Fuentes Castro", role: "guardia", roleName: "Guardia de Seguridad", conjunto: "general", unit: "N/A", phone: "+56 9 9999 9999", email: "david.fuentes@cyj.cl", online: true, memberSince: "2022", avatarInitial: "D" },
+  { id: "u10", name: "Andrés Vidal Espinoza", role: "guardia", roleName: "Guardia de Seguridad", conjunto: "general", unit: "N/A", phone: "+56 9 1010 1010", email: "andres.vidal@cyj.cl", online: false, memberSince: "2023", avatarInitial: "A" },
+  { id: "u11", name: "Carlos Pérez Gutiérrez", role: "residente_p", roleName: "Residente Principal", conjunto: "flamencos", unit: "12", phone: "+56 9 1234 5678", email: "carlos.perez@email.com", online: true, memberSince: "2023", avatarInitial: "C" },
+  { id: "u12", name: "Valentina Rojas Parra", role: "residente_p", roleName: "Residente Principal", conjunto: "canquen", unit: "102", phone: "+56 9 1212 3434", email: "valentina.rojas@email.com", online: true, memberSince: "2022", avatarInitial: "V" },
+  { id: "u13", name: "Francisco Morales Ibañez", role: "residente_p", roleName: "Residente Principal", conjunto: "bandurrias", unit: "6", phone: "+56 9 1313 5353", email: "francisco.morales@email.com", online: false, memberSince: "2021", avatarInitial: "F" },
+  { id: "u14", name: "Camila Núñez Olivera", role: "residente", roleName: "Residente", conjunto: "albatros", unit: "4", phone: "+56 9 1414 6464", email: "camila.nunez@email.com", online: true, memberSince: "2023", avatarInitial: "C" },
+  { id: "u15", name: "Diego Pizarro Sepúlveda", role: "residente", roleName: "Residente", conjunto: "faisanes", unit: "9", phone: "+56 9 1515 7575", email: "diego.pizarro@email.com", online: false, memberSince: "2024", avatarInitial: "D" },
+  { id: "u16", name: "Isabella Castro Godoy", role: "residente", roleName: "Residente", conjunto: "canquen", unit: "305", phone: "+56 9 1616 8686", email: "isabella.castro@email.com", online: true, memberSince: "2023", avatarInitial: "I" },
+  { id: "u17", name: "Rosa Elena Gutiérrez", role: "familiar", roleName: "Familiar Autorizado", conjunto: "flamencos", unit: "12", phone: "+56 9 1717 9797", email: "rosa.gutierrez@email.com", online: false, memberSince: "2023", avatarInitial: "R" },
+  { id: "u18", name: "Felipe Reyes Campos", role: "familiar", roleName: "Familiar Autorizado", conjunto: "canquen", unit: "102", phone: "+56 9 1818 0808", email: "felipe.reyes@email.com", online: true, memberSince: "2024", avatarInitial: "F" },
+  { id: "u19", name: "Gabriela Ortega Ríos", role: "familiar", roleName: "Familiar Autorizado", conjunto: "bandurrias", unit: "6", phone: "+56 9 1919 1919", email: "gabriela.ortega@email.com", online: false, memberSince: "2024", avatarInitial: "G" },
+  { id: "u20", name: "Tomás Becker Araya", role: "visitante", roleName: "Visitante Temporal", conjunto: "general", unit: "-", phone: "+56 9 2020 2020", email: "tomas.becker@email.com", online: true, memberSince: "2024", avatarInitial: "T" },
+  { id: "u21", name: "Patricia Lillo Salazar", role: "residente", roleName: "Residente", conjunto: "gaviotas", unit: "11", phone: "+56 9 2121 2121", email: "patricia.lillo@email.com", online: false, memberSince: "2022", avatarInitial: "P" },
+  { id: "u22", name: "Sebastián Agüero Cortés", role: "residente_p", roleName: "Residente Principal", conjunto: "becacinas", unit: "7", phone: "+56 9 2222 3232", email: "sebastian.aguero@email.com", online: true, memberSince: "2021", avatarInitial: "S" },
+  { id: "u23", name: "Matías Bravo Quiroz", role: "guardia", roleName: "Guardia de Seguridad", conjunto: "general", unit: "N/A", phone: "+56 9 2323 4343", email: "matias.bravo@cyj.cl", online: true, memberSince: "2023", avatarInitial: "M" },
+  { id: "u24", name: "Javiera Donoso Vega", role: "residente", roleName: "Residente", conjunto: "albatros", unit: "15", phone: "+56 9 2424 5454", email: "javiera.donoso@email.com", online: false, memberSince: "2024", avatarInitial: "J" },
 ];
 
 /* ═══════════════════════════════════════════════════════════

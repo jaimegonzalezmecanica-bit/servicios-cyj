@@ -88,6 +88,7 @@ import {
   type RoleId,
   type Role,
   type UserProfile,
+  type Conjunto,
   type SampleUser,
 } from "@/lib/mock-data";
 
@@ -669,7 +670,7 @@ function HomeTab({
       {/* Condo badge */}
       <div className="bg-[#0f4c81]/5 rounded-xl px-4 py-2.5 flex items-center gap-2 border border-[#0f4c81]/10">
         <Building2 className="w-4 h-4 text-[#0f4c81]" />
-        <span className="text-sm text-[#0f4c81] font-medium">{currentUser.condo} | Torre {currentUser.tower} - U.{currentUser.unit}</span>
+        <span className="text-sm text-[#0f4c81] font-medium">{currentUser.condo} | Conjunto {currentUser.conjunto}</span>
       </div>
 
       {/* Safety Status Card */}
@@ -1169,7 +1170,7 @@ function RolesTab({
   /* Create user form state */
   const [newName, setNewName] = useState("");
   const [newRole, setNewRole] = useState<string>("");
-  const [newTower, setNewTower] = useState("");
+  const [newConjunto, setNewConjunto] = useState("");
   const [newUnit, setNewUnit] = useState("");
   const [newPhone, setNewPhone] = useState("");
   const [newEmail, setNewEmail] = useState("");
@@ -1195,13 +1196,13 @@ function RolesTab({
       const res = await fetch("/api/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName.trim(), role: newRole, tower: newTower, unit: newUnit, phone: newPhone.trim(), email: newEmail.trim(), password: newPassword || undefined }),
+        body: JSON.stringify({ name: newName.trim(), role: newRole, conjunto: newConjunto, unit: newUnit, phone: newPhone.trim(), email: newEmail.trim(), password: newPassword || undefined }),
       });
       const data = await res.json();
       if (data.success && data.user) {
         onUsersChange([...users, data.user as SampleUser]);
         toast({ title: "Usuario creado", description: `${data.user.name} ha sido agregado. Contraseña: cyj2025` });
-        setNewName(""); setNewRole(""); setNewTower(""); setNewUnit(""); setNewPhone(""); setNewEmail(""); setNewPassword("");
+        setNewName(""); setNewRole(""); setNewConjunto(""); setNewUnit(""); setNewPhone(""); setNewEmail(""); setNewPassword("");
         setShowCreateUser(false);
       } else {
         toast({ title: "Error", description: data.error || "No se pudo crear el usuario.", variant: "destructive" });
@@ -1332,7 +1333,7 @@ function RolesTab({
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-slate-900 truncate">{user.name}</p>
-                  <p className="text-[11px] text-slate-400">{user.tower !== "N/A" ? `Torre ${user.tower} - U.${user.unit}` : "Personal de seguridad"}</p>
+                  <p className="text-[11px] text-slate-400">{user.conjunto !== "general" ? `Conjunto ${user.conjunto}` : "Personal de seguridad"}</p>
                 </div>
                 <div className="px-2 py-0.5 rounded-full text-[9px] font-bold border flex-shrink-0" style={{ backgroundColor: (role?.color || "#64748b") + "20", color: role?.color || "#64748b", borderColor: (role?.color || "#64748b") + "40" }}>
                   {user.roleName}
@@ -1377,10 +1378,10 @@ function RolesTab({
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-slate-600">Torre</Label>
-                  <Select value={newTower} onValueChange={setNewTower}>
+                  <Label className="text-xs font-medium text-slate-600">Conjunto</Label>
+                  <Select value={newConjunto} onValueChange={setNewConjunto}>
                     <SelectTrigger className="w-full rounded-xl h-11">
-                      <SelectValue placeholder="Torre" />
+                      <SelectValue placeholder="Conjunto" />
                     </SelectTrigger>
                     <SelectContent>
                       {towers.map((t) => (
@@ -1443,7 +1444,7 @@ function RolesTab({
               })()}
             </div>
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between"><span className="text-slate-500">Torre / Unidad</span><span className="font-medium text-slate-900">{selectedUser.tower !== "N/A" ? `Torre ${selectedUser.tower} - U.${selectedUser.unit}` : "N/A"}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Conjunto</span><span className="font-medium text-slate-900">{selectedUser.conjunto !== "general" ? selectedUser.conjunto : "N/A"}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">Teléfono</span><span className="font-medium text-slate-900">{selectedUser.phone}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">Email</span><span className="font-medium text-slate-900 text-xs">{selectedUser.email}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">Estado</span><span className={`font-medium ${selectedUser.online ? "text-green-600" : "text-slate-400"}`}>{selectedUser.online ? "En línea" : "Desconectado"}</span></div>
@@ -1554,8 +1555,8 @@ function AdminTab({
   onAnnouncementsChange: (a: Announcement[]) => void;
   guards: GuardOnDuty[];
   onGuardsChange: (g: GuardOnDuty[]) => void;
-  towers: Tower[];
-  onTowersChange: (t: Tower[]) => void;
+  towers: Conjunto[];
+  onTowersChange: (t: Conjunto[]) => void;
   currentUser: UserProfile;
 }) {
   const { toast } = useToast();
@@ -1573,19 +1574,22 @@ function AdminTab({
   const [shiftType, setShiftType] = useState("Turno Mañana");
   const [shiftStart, setShiftStart] = useState("07:00");
   const [shiftEnd, setShiftEnd] = useState("15:00");
-  const [shiftZone, setShiftZone] = useState("Torres A-B");
+  const [shiftZone, setShiftZone] = useState("General");
   const [shiftPhone, setShiftPhone] = useState("");
   const [shiftSubmitting, setShiftSubmitting] = useState(false);
 
-  /* ─── Tower management state ─── */
-  const [showTowerForm, setShowTowerForm] = useState(false);
-  const [editingTower, setEditingTower] = useState<Tower | null>(null);
-  const [towerId, setTowerId] = useState("");
-  const [towerName, setTowerName] = useState("");
-  const [towerUnits, setTowerUnits] = useState("");
-  const [towerFloors, setTowerFloors] = useState("");
-  const [towerStatus, setTowerStatus] = useState<"operativa" | "mantención">("operativa");
-  const [towerSubmitting, setTowerSubmitting] = useState(false);
+  /* ─── Conjunto management state ─── */
+  const [showConjuntoForm, setShowConjuntoForm] = useState(false);
+  const [editingConjunto, setEditingConjunto] = useState<Conjunto | null>(null);
+  const [cjtId, setCjtId] = useState("");
+  const [cjtName, setCjtName] = useState("");
+  const [cjtType, setCjtType] = useState<"casas" | "torres">("casas");
+  const [cjtHouses, setCjtHouses] = useState("");
+  const [cjtTowersCount, setCjtTowersCount] = useState("");
+  const [cjtUnits, setCjtUnits] = useState("");
+  const [cjtFloors, setCjtFloors] = useState("");
+  const [cjtStatus, setCjtStatus] = useState<"operativo" | "mantención">("operativo");
+  const [cjtSubmitting, setCjtSubmitting] = useState(false);
 
   /* ─── Create Announcement ─── */
   const handleCreateAnnouncement = async () => {
@@ -1630,7 +1634,7 @@ function AdminTab({
       if (data.success && data.guard) {
         onGuardsChange([...guards, data.guard]);
         toast({ title: "Turno asignado", description: `Se ha asignado turno a ${data.guard.name}.` });
-        setShiftName(""); setShiftType("Turno Mañana"); setShiftStart("07:00"); setShiftEnd("15:00"); setShiftZone("Torres A-B"); setShiftPhone("");
+        setShiftName(""); setShiftType("Turno Mañana"); setShiftStart("07:00"); setShiftEnd("15:00"); setShiftZone("General"); setShiftPhone("");
         setShowAssignShift(false);
       } else {
         toast({ title: "Error", description: data.error || "No se pudo asignar el turno.", variant: "destructive" });
@@ -1660,83 +1664,95 @@ function AdminTab({
     }
   };
 
-  /* ─── Tower CRUD ─── */
-  const openCreateTower = () => {
-    setEditingTower(null);
-    setTowerId(""); setTowerName(""); setTowerUnits(""); setTowerFloors(""); setTowerStatus("operativa");
-    setShowTowerForm(true);
+  /* ─── Conjunto CRUD ─── */
+  const openCreateConjunto = () => {
+    setEditingConjunto(null);
+    setCjtId(""); setCjtName(""); setCjtType("casas"); setCjtHouses(""); setCjtTowersCount(""); setCjtUnits(""); setCjtFloors(""); setCjtStatus("operativo");
+    setShowConjuntoForm(true);
   };
 
-  const openEditTower = (t: Tower) => {
-    setEditingTower(t);
-    setTowerId(t.id); setTowerName(t.name); setTowerUnits(String(t.units)); setTowerFloors(String(t.floors)); setTowerStatus(t.status);
-    setShowTowerForm(true);
+  const openEditConjunto = (c: Conjunto) => {
+    setEditingConjunto(c);
+    setCjtId(c.id); setCjtName(c.name); setCjtType(c.type);
+    setCjtHouses(c.houses != null ? String(c.houses) : "");
+    setCjtTowersCount(c.towersCount != null ? String(c.towersCount) : "");
+    setCjtUnits(c.units != null ? String(c.units) : "");
+    setCjtFloors(c.floors != null ? String(c.floors) : "");
+    setCjtStatus(c.status);
+    setShowConjuntoForm(true);
   };
 
-  const handleSaveTower = async () => {
-    if (!towerId.trim()) { toast({ title: "ID requerido", description: "Ej: G, H, I", variant: "destructive" }); return; }
-    if (!towerName.trim()) { toast({ title: "Nombre requerido", description: "Ej: Torre G", variant: "destructive" }); return; }
-    if (!towerUnits || Number(towerUnits) < 1) { toast({ title: "Unidades inválidas", variant: "destructive" }); return; }
-    if (!towerFloors || Number(towerFloors) < 1) { toast({ title: "Pisos inválidos", variant: "destructive" }); return; }
+  const handleSaveConjunto = async () => {
+    if (!cjtId.trim()) { toast({ title: "ID requerido", description: "Ej: flamingo, colibri", variant: "destructive" }); return; }
+    if (!cjtName.trim()) { toast({ title: "Nombre requerido", description: "Ej: Flamencos", variant: "destructive" }); return; }
+    if (!cjtType) { toast({ title: "Tipo requerido", variant: "destructive" }); return; }
 
-    // Check for duplicate ID (except when editing same tower)
-    if (!editingTower && towers.some((t) => t.id === towerId.trim().toUpperCase())) {
-      toast({ title: "ID duplicado", description: "Ya existe una torre con ese ID.", variant: "destructive" });
+    if (!editingConjunto && towers.some((t) => t.id === cjtId.trim().toLowerCase().replace(/\s+/g, "_"))) {
+      toast({ title: "ID duplicado", description: "Ya existe un conjunto con ese ID.", variant: "destructive" });
       return;
     }
 
-    setTowerSubmitting(true);
+    setCjtSubmitting(true);
+    const payload: Record<string, unknown> = {
+      id: cjtId.trim().toLowerCase().replace(/\s+/g, "_"),
+      name: cjtName.trim(),
+      type: cjtType,
+      status: cjtStatus,
+    };
+    if (cjtHouses) payload.houses = Number(cjtHouses);
+    if (cjtTowersCount) payload.towersCount = Number(cjtTowersCount);
+    if (cjtUnits) payload.units = Number(cjtUnits);
+    if (cjtFloors) payload.floors = Number(cjtFloors);
+
     try {
-      if (editingTower) {
-        // UPDATE
+      if (editingConjunto) {
         const res = await fetch("/api/towers", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ towerId: editingTower.id, id: towerId.trim().toUpperCase(), name: towerName.trim(), units: Number(towerUnits), floors: Number(towerFloors), status: towerStatus }),
+          body: JSON.stringify({ towerId: editingConjunto.id, ...payload }),
         });
         const data = await res.json();
         if (data.success && data.tower) {
-          onTowersChange(towers.map((t) => (t.id === editingTower.id ? data.tower : t)));
-          toast({ title: "Torre actualizada", description: `${data.tower.name} ha sido actualizada.` });
-          setShowTowerForm(false);
+          onTowersChange(towers.map((t) => (t.id === editingConjunto.id ? data.tower : t)));
+          toast({ title: "Conjunto actualizado", description: `${data.tower.name} ha sido actualizado.` });
+          setShowConjuntoForm(false);
         } else {
-          toast({ title: "Error", description: data.error || "No se pudo actualizar la torre.", variant: "destructive" });
+          toast({ title: "Error", description: data.error || "No se pudo actualizar.", variant: "destructive" });
         }
       } else {
-        // CREATE
         const res = await fetch("/api/towers", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: towerId.trim().toUpperCase(), name: towerName.trim(), units: Number(towerUnits), floors: Number(towerFloors), status: towerStatus }),
+          body: JSON.stringify(payload),
         });
         const data = await res.json();
         if (data.success && data.tower) {
           onTowersChange([...towers, data.tower]);
-          toast({ title: "Torre creada", description: `${data.tower.name} ha sido agregada.` });
-          setTowerId(""); setTowerName(""); setTowerUnits(""); setTowerFloors(""); setTowerStatus("operativa");
-          setShowTowerForm(false);
+          toast({ title: "Conjunto creado", description: `${data.tower.name} ha sido agregado.` });
+          setCjtId(""); setCjtName(""); setCjtType("casas"); setCjtHouses(""); setCjtTowersCount(""); setCjtUnits(""); setCjtFloors(""); setCjtStatus("operativo");
+          setShowConjuntoForm(false);
         } else {
-          toast({ title: "Error", description: data.error || "No se pudo crear la torre.", variant: "destructive" });
+          toast({ title: "Error", description: data.error || "No se pudo crear el conjunto.", variant: "destructive" });
         }
       }
     } catch {
       toast({ title: "Error", description: "Error de conexión.", variant: "destructive" });
     } finally {
-      setTowerSubmitting(false);
+      setCjtSubmitting(false);
     }
   };
 
-  const handleDeleteTower = async (t: Tower) => {
+  const handleDeleteConjunto = async (c: Conjunto) => {
     try {
       const res = await fetch("/api/towers", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ towerId: t.id }),
+        body: JSON.stringify({ towerId: c.id }),
       });
       const data = await res.json();
       if (data.success) {
-        onTowersChange(towers.filter((tw) => tw.id !== t.id));
-        toast({ title: "Torre eliminada", description: `${t.name} ha sido eliminada.` });
+        onTowersChange(towers.filter((tw) => tw.id !== c.id));
+        toast({ title: "Conjunto eliminado", description: `${c.name} ha sido eliminado.` });
       } else {
         toast({ title: "Error", description: data.error || "No se pudo eliminar.", variant: "destructive" });
       }
@@ -1770,47 +1786,54 @@ function AdminTab({
         </div>
       )}
 
-      {/* Towers Section */}
+      {/* Conjuntos Habitacionales Section */}
       {currentRole.permissions.canManageFacilities && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-slate-900">Torres</h2>
-            <Button size="sm" className="bg-[#0f4c81] hover:bg-[#0a3a63] text-white rounded-lg text-xs h-7" onClick={openCreateTower}>
+            <h2 className="text-base font-bold text-slate-900">Conjuntos Habitacionales</h2>
+            <Button size="sm" className="bg-[#0f4c81] hover:bg-[#0a3a63] text-white rounded-lg text-xs h-7" onClick={openCreateConjunto}>
               <Plus className="w-3 h-3 mr-1" /> Agregar
             </Button>
           </div>
           {towers.length === 0 ? (
             <div className="flex flex-col items-center py-8 gap-2">
               <Building2 className="w-8 h-8 text-slate-300" />
-              <p className="text-sm text-slate-400">No hay torres</p>
+              <p className="text-sm text-slate-400">No hay conjuntos</p>
             </div>
           ) : (
             <div className="space-y-2">
-              {towers.map((t) => (
-                <div key={t.id} className="bg-white rounded-xl border border-slate-200 p-3 flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${t.status === "operativa" ? "bg-blue-50 text-blue-600" : "bg-amber-50 text-amber-600"}`}>
+              {towers.map((c) => (
+                <div key={c.id} className="bg-white rounded-xl border border-slate-200 p-3 flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${c.type === "casas" ? "bg-emerald-50 text-emerald-600" : "bg-blue-50 text-blue-600"}`}>
                     <Building2 className="w-5 h-5" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold text-slate-900">{t.name}</p>
-                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${t.status === "operativa" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
-                        {t.status === "operativa" ? "Operativa" : "Mantención"}
+                      <p className="text-sm font-semibold text-slate-900">{c.name}</p>
+                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${c.type === "casas" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}>
+                        {c.type === "casas" ? "Casas" : "Torres"}
+                      </span>
+                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${c.status === "operativo" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                        {c.status === "operativo" ? "Operativo" : "Mantención"}
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-400">{t.units} unidades • {t.floors} pisos</p>
+                    <p className="text-[11px] text-slate-400">
+                      {c.type === "casas" ? (c.houses ? `${c.houses} casas` : "Casas") : (c.towersCount ? `${c.towersCount} torres` : "Torres")}
+                      {c.units ? ` • ${c.units} unidades` : ""}
+                      {c.floors ? ` • ${c.floors} pisos` : ""}
+                    </p>
                   </div>
                   <div className="flex items-center gap-1">
-                    <button onClick={() => openEditTower(t)} className="w-7 h-7 rounded-lg bg-slate-50 flex items-center justify-center active:bg-slate-100">
+                    <button onClick={() => openEditConjunto(c)} className="w-7 h-7 rounded-lg bg-slate-50 flex items-center justify-center active:bg-slate-100">
                       <Pencil className="w-3.5 h-3.5 text-slate-500" />
                     </button>
-                    <button onClick={() => handleDeleteTower(t)} className="w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center active:bg-red-100">
+                    <button onClick={() => handleDeleteConjunto(c)} className="w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center active:bg-red-100">
                       <Trash2 className="w-3.5 h-3.5 text-red-500" />
                     </button>
                   </div>
                 </div>
               ))}
-              <p className="text-[10px] text-slate-400 text-center pt-1">{towers.length} torres • {towers.reduce((sum, t) => sum + t.units, 0)} unidades totales</p>
+              <p className="text-[10px] text-slate-400 text-center pt-1">{towers.length} conjuntos habitacionales</p>
             </div>
           )}
         </div>
@@ -1996,11 +2019,15 @@ function AdminTab({
                     <SelectValue placeholder="Seleccionar zona" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Torres A-B">Torres A-B</SelectItem>
-                    <SelectItem value="Torres C-D">Torres C-D</SelectItem>
-                    <SelectItem value="Torres E-F">Torres E-F</SelectItem>
-                    <SelectItem value="Acceso Principal">Acceso Principal</SelectItem>
-                    <SelectItem value="Estacionamiento">Estacionamiento</SelectItem>
+                    <SelectItem value="General">General</SelectItem>
+                    <SelectItem value="Flamencos">Flamencos</SelectItem>
+                    <SelectItem value="Faisanes">Faisanes</SelectItem>
+                    <SelectItem value="Garzas">Garzas</SelectItem>
+                    <SelectItem value="Gaviotas">Gaviotas</SelectItem>
+                    <SelectItem value="Becacinas">Becacinas</SelectItem>
+                    <SelectItem value="Bandurrias">Bandurrias</SelectItem>
+                    <SelectItem value="Albatros">Albatros</SelectItem>
+                    <SelectItem value="Canquén">Canquén</SelectItem>
                     <SelectItem value="Perímetro">Perímetro Completo</SelectItem>
                   </SelectContent>
                 </Select>
@@ -2020,52 +2047,78 @@ function AdminTab({
         </div>
       )}
 
-      {/* ═══ TOWER FORM MODAL ═══ */}
-      {showTowerForm && (
+      {/* ═══ CONJUNTO FORM MODAL ═══ */}
+      {showConjuntoForm && (
         <div className="fixed inset-0 z-50 flex items-end justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setShowTowerForm(false)} />
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowConjuntoForm(false)} />
           <div className="relative bg-white rounded-t-3xl w-full max-w-md p-6 pb-8 space-y-4 animate-slide-up max-h-[85vh] overflow-y-auto">
             <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto" />
-            <h3 className="text-lg font-bold text-slate-900">{editingTower ? "Editar Torre" : "Nueva Torre"}</h3>
+            <h3 className="text-lg font-bold text-slate-900">{editingConjunto ? "Editar Conjunto" : "Nuevo Conjunto Habitacional"}</h3>
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-slate-600">ID de Torre *</Label>
-                  <Input value={towerId} onChange={(e) => setTowerId(e.target.value.toUpperCase())} placeholder="Ej: G" className="rounded-xl h-11" disabled={!!editingTower} />
+                  <Label className="text-xs font-medium text-slate-600">ID *</Label>
+                  <Input value={cjtId} onChange={(e) => setCjtId(e.target.value.toLowerCase().replace(/\s+/g, "_"))} placeholder="Ej: flamencos" className="rounded-xl h-11" disabled={!!editingConjunto} />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-slate-600">Nombre *</Label>
-                  <Input value={towerName} onChange={(e) => setTowerName(e.target.value)} placeholder="Ej: Torre G" className="rounded-xl h-11" />
+                  <Input value={cjtName} onChange={(e) => setCjtName(e.target.value)} placeholder="Ej: Flamencos" className="rounded-xl h-11" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-slate-600">Unidades *</Label>
-                  <Input type="number" min="1" value={towerUnits} onChange={(e) => setTowerUnits(e.target.value)} placeholder="Ej: 60" className="rounded-xl h-11" />
+                  <Label className="text-xs font-medium text-slate-600">Tipo *</Label>
+                  <Select value={cjtType} onValueChange={(v) => setCjtType(v as "casas" | "torres")}>
+                    <SelectTrigger className="w-full rounded-xl h-11"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="casas">Casas</SelectItem>
+                      <SelectItem value="torres">Torres</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-slate-600">Pisos *</Label>
-                  <Input type="number" min="1" value={towerFloors} onChange={(e) => setTowerFloors(e.target.value)} placeholder="Ej: 10" className="rounded-xl h-11" />
+                  <Label className="text-xs font-medium text-slate-600">Estado</Label>
+                  <Select value={cjtStatus} onValueChange={(v) => setCjtStatus(v as "operativo" | "mantención")}>
+                    <SelectTrigger className="w-full rounded-xl h-11"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="operativo">Operativo</SelectItem>
+                      <SelectItem value="mantención">Mantención</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-600">Estado</Label>
-                <Select value={towerStatus} onValueChange={(v) => setTowerStatus(v as "operativa" | "mantención")}>
-                  <SelectTrigger className="w-full rounded-xl h-11">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="operativa">Operativa</SelectItem>
-                    <SelectItem value="mantención">Mantención</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="bg-slate-50 rounded-xl p-3 space-y-3">
+                <p className="text-[10px] text-slate-400 font-medium">Datos adicionales (opcional)</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {cjtType === "casas" ? (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-slate-600">N° de casas</Label>
+                      <Input type="number" min="0" value={cjtHouses} onChange={(e) => setCjtHouses(e.target.value)} placeholder="Ej: 25" className="rounded-xl h-11" />
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium text-slate-600">N° de torres</Label>
+                      <Input type="number" min="0" value={cjtTowersCount} onChange={(e) => setCjtTowersCount(e.target.value)} placeholder="Ej: 2" className="rounded-xl h-11" />
+                    </div>
+                  )}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-600">Unidades totales</Label>
+                    <Input type="number" min="0" value={cjtUnits} onChange={(e) => setCjtUnits(e.target.value)} placeholder="Ej: 50" className="rounded-xl h-11" />
+                  </div>
+                </div>
+                {cjtType === "torres" && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-600">Pisos por torre</Label>
+                    <Input type="number" min="0" value={cjtFloors} onChange={(e) => setCjtFloors(e.target.value)} placeholder="Ej: 10" className="rounded-xl h-11" />
+                  </div>
+                )}
               </div>
             </div>
             <div className="space-y-2">
-              <Button onClick={handleSaveTower} disabled={towerSubmitting} className="w-full bg-[#0f4c81] hover:bg-[#0a3a63] text-white rounded-xl h-11">
-                {towerSubmitting ? "Guardando..." : editingTower ? "Guardar Cambios" : "Crear Torre"}
+              <Button onClick={handleSaveConjunto} disabled={cjtSubmitting} className="w-full bg-[#0f4c81] hover:bg-[#0a3a63] text-white rounded-xl h-11">
+                {cjtSubmitting ? "Guardando..." : editingConjunto ? "Guardar Cambios" : "Crear Conjunto"}
               </Button>
-              <Button variant="outline" onClick={() => setShowTowerForm(false)} className="w-full rounded-xl">Cancelar</Button>
+              <Button variant="outline" onClick={() => setShowConjuntoForm(false)} className="w-full rounded-xl">Cancelar</Button>
             </div>
           </div>
         </div>
@@ -2242,8 +2295,8 @@ function ProfileTab({
           <span className="text-sm text-slate-900 font-medium">{currentUser.condo}</span>
         </div>
         <div className="px-4 py-3 border-b border-slate-100 flex justify-between">
-          <span className="text-xs text-slate-500">Torre / Unidad</span>
-          <span className="text-sm text-slate-900 font-medium">Torre {currentUser.tower} - U.{currentUser.unit}</span>
+          <span className="text-xs text-slate-500">Conjunto</span>
+          <span className="text-sm text-slate-900 font-medium">{currentUser.conjunto}</span>
         </div>
         <div className="px-4 py-3 border-b border-slate-100 flex justify-between">
           <span className="text-xs text-slate-500">Rol</span>

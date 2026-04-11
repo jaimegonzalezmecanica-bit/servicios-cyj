@@ -11,7 +11,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, role, tower, unit, phone, email, password } = body;
+    const { name, role, conjunto, unit, phone, email, password } = body;
 
     if (!name || !role || !phone || !email) {
       return NextResponse.json(
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
       name,
       role: role as RoleId,
       roleName: roleData.name,
-      tower: tower || "N/A",
+      conjunto: conjunto || "general",
       unit: unit || "N/A",
       phone,
       email,
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { userId, role, name, phone, email, tower, unit, password } = body;
+    const { userId, role, name, phone, email, conjunto, unit, password } = body;
 
     if (!userId) {
       return NextResponse.json(
@@ -83,7 +83,7 @@ export async function PUT(request: NextRequest) {
     if (name) updates.name = name;
     if (phone) updates.phone = phone;
     if (email) updates.email = email;
-    if (tower !== undefined) updates.tower = tower;
+    if (conjunto !== undefined) updates.conjunto = conjunto;
     if (unit !== undefined) updates.unit = unit;
     if (password) updates.password = password;
 

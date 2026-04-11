@@ -2,7 +2,7 @@
 // Both /api/auth and /api/users use this store so that
 // dynamically created users can authenticate.
 
-import { sampleUsers, type SampleUser, type RoleId, mockAlerts, type Alert, guardsOnDuty as initialGuards, type GuardOnDuty, announcements as initialAnnouncements, type Announcement, towers as initialTowers, type Tower } from "@/lib/mock-data";
+import { sampleUsers, type SampleUser, type RoleId, mockAlerts, type Alert, guardsOnDuty as initialGuards, type GuardOnDuty, announcements as initialAnnouncements, type Announcement, conjuntos as initialConjuntos, type Conjunto } from "@/lib/mock-data";
 
 /* ═══════════════════════════════════════════════════════════
    USERS STORE (shared across API routes)
@@ -91,13 +91,13 @@ export function getAllAnnouncements(): Announcement[] {
    TOWERS STORE
    ═══════════════════════════════════════════════════════════ */
 
-export let towers: Tower[] = [...initialTowers];
+export let towers: Conjunto[] = [...initialConjuntos];
 
-export function addTower(tower: Tower): void {
+export function addTower(tower: Conjunto): void {
   towers.push(tower);
 }
 
-export function updateTower(towerId: string, updates: Partial<Tower>): Tower | undefined {
+export function updateTower(towerId: string, updates: Partial<Conjunto>): Conjunto | undefined {
   const index = towers.findIndex((t) => t.id === towerId);
   if (index === -1) return undefined;
   towers[index] = { ...towers[index], ...updates };

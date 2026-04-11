@@ -1,59 +1,65 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAllTowers, addTower, updateTower, deleteTower } from "@/lib/store";
 
-// GET /api/towers — list all towers
+// GET /api/towers — list all conjuntos habitacionales
 export async function GET() {
   return NextResponse.json({ towers: getAllTowers() });
 }
 
-// POST /api/towers — create new tower
+// POST /api/towers — create new conjunto
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, name, units, floors, status } = body;
+    const { id, name, type, houses, towersCount, units, floors, status } = body;
 
-    if (!id || !name || !units || !floors) {
+    if (!id || !name || !type) {
       return NextResponse.json(
-        { success: false, error: "id, name, units y floors son requeridos" },
+        { success: false, error: "ID, nombre y tipo son requeridos" },
         { status: 400 }
       );
     }
 
-    if (units < 1 || floors < 1) {
+    const validTypes = ["casas", "torres"];
+    if (!validTypes.includes(type)) {
       return NextResponse.json(
-        { success: false, error: "units y floors deben ser mayor a 0" },
+        { success: false, error: "Tipo inválido. Use: casas o torres" },
         { status: 400 }
       );
     }
 
-    const validStatuses = ["operativa", "mantención"];
+    const validStatuses = ["operativo", "mantención"];
     if (status && !validStatuses.includes(status)) {
       return NextResponse.json(
-        { success: false, error: "Estado inválido. Use: operativa o mantención" },
+        { success: false, error: "Estado inválido. Use: operativo o mantención" },
         { status: 400 }
       );
     }
 
-    const newTower = {
-      id,
-      name,
-      units: Number(units),
-      floors: Number(floors),
-      status: status || "operativa",
+    const newConjunto: Record<string, unknown> = {
+      id: id.trim().toLowerCase().replace(/\s+/g, "_"),
+      name: name.trim(),
+      type,
+      status: status || "operativo",
     };
 
-    addTower(newTower);
+    // All numeric fields are optional
+    if (houses !== undefined && houses !== "") newConjunto.houses = Number(houses);
+    if (towersCount !== undefined && towersCount !== "") newConjunto.towersCount = Number(towersCount);
+    if (units !== undefined && units !== "") newConjunto.units = Number(units);
+    if (floors !== undefined && floors !== "") newConjunto.floors = Number(floors);
 
-    return NextResponse.json({ success: true, tower: newTower });
+    addTower(newConjunto as any);
+
+    return NextResponse.json({ success: true, tower: newConjunto });
   } catch {
     return NextResponse.json(
-      { success: false, error: "Error al crear torre" },
+      { success: false, error: "Error al crear conjunto" },
       { status: 500 }
     );
   }
 }
 
-// PUT /api/towers — update tower
+// PUT /api/towers — update conjunto
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
@@ -61,18 +67,28 @@ export async function PUT(request: NextRequest) {
 
     if (!towerId) {
       return NextResponse.json(
-        { success: false, error: "towerId es requerido" },
+        { success: false, error: "ID del conjunto es requerido" },
         { status: 400 }
       );
     }
 
-    if (updates.units !== undefined) updates.units = Number(updates.units);
-    if (updates.floors !== undefined) updates.floors = Number(updates.floors);
+    // Clean up empty numeric fields — remove them instead of storing empty
+    if (updates.houses !== undefined && (updates.houses === "" || updates.houses === null)) delete updates.houses;
+    else if (updates.houses !== undefined) updates.houses = Number(updates.houses);
 
-    const validStatuses = ["operativa", "mantención"];
+    if (updates.towersCount !== undefined && (updates.towersCount === "" || updates.towersCount === null)) delete updates.towersCount;
+    else if (updates.towersCount !== undefined) updates.towersCount = Number(updates.towersCount);
+
+    if (updates.units !== undefined && (updates.units === "" || updates.units === null)) delete updates.units;
+    else if (updates.units !== undefined) updates.units = Number(updates.units);
+
+    if (updates.floors !== undefined && (updates.floors === "" || updates.floors === null)) delete updates.floors;
+    else if (updates.floors !== undefined) updates.floors = Number(updates.floors);
+
+    const validStatuses = ["operativo", "mantención"];
     if (updates.status && !validStatuses.includes(updates.status)) {
       return NextResponse.json(
-        { success: false, error: "Estado inválido. Use: operativa o mantención" },
+        { success: false, error: "Estado inválido. Use: operativo o mantención" },
         { status: 400 }
       );
     }
@@ -80,7 +96,7 @@ export async function PUT(request: NextRequest) {
     const updated = updateTower(towerId, updates);
     if (!updated) {
       return NextResponse.json(
-        { success: false, error: "Torre no encontrada" },
+        { success: false, error: "Conjunto no encontrado" },
         { status: 404 }
       );
     }
@@ -88,13 +104,13 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ success: true, tower: updated });
   } catch {
     return NextResponse.json(
-      { success: false, error: "Error al actualizar torre" },
+      { success: false, error: "Error al actualizar conjunto" },
       { status: 500 }
     );
   }
 }
 
-// DELETE /api/towers — delete tower
+// DELETE /api/towers — delete conjunto
 export async function DELETE(request: NextRequest) {
   try {
     const body = await request.json();
@@ -102,7 +118,7 @@ export async function DELETE(request: NextRequest) {
 
     if (!towerId) {
       return NextResponse.json(
-        { success: false, error: "towerId es requerido" },
+        { success: false, error: "ID del conjunto es requerido" },
         { status: 400 }
       );
     }
@@ -110,7 +126,7 @@ export async function DELETE(request: NextRequest) {
     const deleted = deleteTower(towerId);
     if (!deleted) {
       return NextResponse.json(
-        { success: false, error: "Torre no encontrada" },
+        { success: false, error: "Conjunto no encontrado" },
         { status: 404 }
       );
     }
@@ -118,7 +134,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true, tower: deleted });
   } catch {
     return NextResponse.json(
-      { success: false, error: "Error al eliminar torre" },
+      { success: false, error: "Error al eliminar conjunto" },
       { status: 500 }
     );
   }
