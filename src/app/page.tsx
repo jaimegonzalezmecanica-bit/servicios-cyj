@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +10,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Shield,
   AlertTriangle,
@@ -56,6 +64,7 @@ import {
   Smartphone,
   Download,
   X,
+  Trash2,
 } from "lucide-react";
 import {
   mockAlerts,
@@ -77,6 +86,22 @@ import {
   type UserProfile,
   type SampleUser,
 } from "@/lib/mock-data";
+
+/* ═══════════════════════════════════════════════════════════
+   DYNAMIC IMPORT: Leaflet Map (no SSR)
+   ═══════════════════════════════════════════════════════════ */
+
+const MapView = dynamic(() => import("@/components/map-view"), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-full bg-slate-100 rounded-2xl flex items-center justify-center">
+      <div className="text-center">
+        <div className="w-8 h-8 border-2 border-[#0f4c81] border-t-transparent rounded-full animate-spin mx-auto" />
+        <p className="text-xs text-slate-400 mt-2">Cargando mapa...</p>
+      </div>
+    </div>
+  ),
+});
 
 /* ═══════════════════════════════════════════════════════════
    TYPES
@@ -160,16 +185,6 @@ function getSeverityColor(severity: string) {
     case "info": return "#3b82f6";
     default: return "#64748b";
   }
-}
-
-function InfoIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <path d="M12 16v-4" />
-      <path d="M12 8h.01" />
-    </svg>
-  );
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -269,7 +284,7 @@ function InstallGuide({ onClose }: { onClose: () => void }) {
               <div className="w-6 h-6 bg-green-600 text-white rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">4</div>
               <div>
                 <p className="text-sm font-semibold text-slate-800">Listo!</p>
-<p className="text-xs text-slate-500 mt-0.5">La app aparecera en tu pantalla principal como cualquier otra app</p>
+                <p className="text-xs text-slate-500 mt-0.5">La app aparecera en tu pantalla principal como cualquier otra app</p>
               </div>
             </div>
           </div>
@@ -582,17 +597,19 @@ function TopBar({ currentUser, currentRole, onNavigate }: { currentUser: UserPro
 function HomeTab({
   currentUser,
   currentRole,
+  alerts,
   onNavigate,
   onSOSActivate,
 }: {
   currentUser: UserProfile;
   currentRole: Role;
+  alerts: Alert[];
   onNavigate: (tab: TabId) => void;
   onSOSActivate: () => void;
 }) {
   const [showSOSConfirm, setShowSOSConfirm] = useState(false);
   const { toast } = useToast();
-  const recentAlerts = mockAlerts.slice(0, 3);
+  const recentAlerts = alerts.slice(0, 3);
 
   const handleSOS = () => {
     setShowSOSConfirm(false);
@@ -764,7 +781,13 @@ function HomeTab({
    TAB 2: REPORT
    ═══════════════════════════════════════════════════════════ */
 
-function ReportTab({ onNavigate }: { onNavigate: (tab: TabId) => void }) {
+function ReportTab({
+  onNavigate,
+  onReportSubmitted,
+}: {
+  onNavigate: (tab: TabId) => void;
+  onReportSubmitted: (alert: Alert) => void;
+}) {
   const { toast } = useToast();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [description, setDescription] = useState("");
@@ -781,7 +804,11 @@ function ReportTab({ onNavigate }: { onNavigate: (tab: TabId) => void }) {
     try {
       const res = await fetch("/api/alert", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category: selectedCategory, description, location: useLocation ? "Ubicación actual" : "No especificada", isAnonymous, priority }) });
       const data = await res.json();
-      if (data.success) { setShowSuccess(true); setTimeout(() => { setShowSuccess(false); onNavigate("alerts"); }, 2000); }
+      if (data.success && data.alert) {
+        onReportSubmitted(data.alert);
+        setShowSuccess(true);
+        setTimeout(() => { setShowSuccess(false); onNavigate("alerts"); }, 2000);
+      }
     } catch { toast({ title: "Error", description: "No se pudo enviar el reporte.", variant: "destructive" }); }
     finally { setIsSubmitting(false); }
   };
@@ -870,13 +897,16 @@ function ReportTab({ onNavigate }: { onNavigate: (tab: TabId) => void }) {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   TAB 3: MAP
+   TAB 3: MAP (Leaflet)
    ═══════════════════════════════════════════════════════════ */
 
 function MapTab() {
   const [selectedFilter, setSelectedFilter] = useState("Todos");
   const [selectedMarker, setSelectedMarker] = useState<IncidentMarker | null>(null);
-  const filteredMarkers = selectedFilter === "Críticos" ? incidentMarkers.filter((m) => m.severity === "critical") : selectedFilter === "Resueltos" ? incidentMarkers.slice(4, 6) : incidentMarkers;
+
+  const handleSelectMarker = useCallback((marker: IncidentMarker) => {
+    setSelectedMarker(marker);
+  }, []);
 
   return (
     <div className="space-y-0 pb-4 animate-fade-in">
@@ -884,32 +914,31 @@ function MapTab() {
         <h1 className="text-xl font-bold text-slate-900">Mapa de Incidentes</h1>
         <button className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center shadow-sm"><Filter className="w-5 h-5 text-slate-600" /></button>
       </div>
-      <div className="relative h-[380px] rounded-2xl overflow-hidden shadow-sm border border-slate-200 bg-slate-100 mt-3">
-        <Image src="/download/map-bg.png" alt="Mapa de la comunidad" fill className="object-cover" />
-        <div className="absolute inset-0" style={{ backgroundImage: "linear-gradient(rgba(15,76,129,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(15,76,129,0.05) 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
-        <div className="absolute inset-4 border-2 border-dashed border-[#0f4c81]/30 rounded-3xl" />
-        <div className="absolute" style={{ left: "45%", top: "48%" }}>
-          <div className="relative">
-            <div className="absolute inset-0 w-6 h-6 bg-[#0f4c81]/30 rounded-full animate-ping" />
-            <div className="relative w-6 h-6 bg-[#0f4c81] rounded-full border-2 border-white shadow-lg flex items-center justify-center"><div className="w-2 h-2 bg-white rounded-full" /></div>
-          </div>
-          <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[9px] bg-[#0f4c81] text-white px-1.5 py-0.5 rounded-full whitespace-nowrap font-medium">Tú</span>
-        </div>
-        {filteredMarkers.map((marker) => (
-          <button key={marker.id} onClick={() => setSelectedMarker(marker)} className="absolute transition-transform active:scale-90 hover:scale-110" style={{ left: `${marker.lng}%`, top: `${marker.lat}%` }}>
-            <div className="w-8 h-8 rounded-full border-2 border-white shadow-lg flex items-center justify-center" style={{ backgroundColor: getSeverityColor(marker.severity) }}>
-              {marker.severity === "info" ? <InfoIcon /> : <AlertTriangle className="w-4 h-4 text-white" />}
-            </div>
-          </button>
-        ))}
-        <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm rounded-xl p-2.5 shadow-lg space-y-1.5">
+      <div className="relative h-[380px] rounded-2xl overflow-hidden shadow-sm border border-slate-200 mt-3">
+        <MapView
+          incidents={incidentMarkers}
+          filter={selectedFilter}
+          onSelectMarker={handleSelectMarker}
+        />
+        {/* Legend overlay */}
+        <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm rounded-xl p-2.5 shadow-lg space-y-1.5 z-[1000]">
           <p className="text-[10px] font-semibold text-slate-700">Leyenda</p>
-          {[{ c: "bg-red-600", l: "Crítico" }, { c: "bg-orange-500", l: "Advertencia" }, { c: "bg-blue-500", l: "Info" }, { c: "bg-[#0f4c81]", l: "Mi ubicación" }].map((x) => (
-            <div key={x.l} className="flex items-center gap-1.5">
-              <div className={`w-3 h-3 rounded-full ${x.c} ${x.l === "Mi ubicación" ? "border-2 border-white shadow" : ""}`} />
-              <span className="text-[10px] text-slate-500">{x.l}</span>
-            </div>
-          ))}
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full bg-[#0f4c81] border border-white shadow" />
+            <span className="text-[10px] text-slate-500">Torre</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full bg-red-600" />
+            <span className="text-[10px] text-slate-500">Crítico</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full bg-orange-500" />
+            <span className="text-[10px] text-slate-500">Advertencia</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full bg-blue-500" />
+            <span className="text-[10px] text-slate-500">Info</span>
+          </div>
         </div>
       </div>
       <div className="flex gap-2 overflow-x-auto py-3 scrollbar-hide">
@@ -944,13 +973,12 @@ function MapTab() {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   TAB 4: ALERTS
+   TAB 4: ALERTS (stateful)
    ═══════════════════════════════════════════════════════════ */
 
-function AlertsTab() {
+function AlertsTab({ alerts }: { alerts: Alert[] }) {
   const [selectedFilter, setSelectedFilter] = useState("Todas");
-  const { toast } = useToast();
-  const filteredAlerts = selectedFilter === "Activas" ? mockAlerts.filter((a) => a.status === "activa") : selectedFilter === "Resueltas" ? mockAlerts.filter((a) => a.status === "resuelta") : selectedFilter === "Mías" ? mockAlerts.filter((_, i) => i % 3 === 0) : mockAlerts;
+  const filteredAlerts = selectedFilter === "Activas" ? alerts.filter((a) => a.status === "activa") : selectedFilter === "Resueltas" ? alerts.filter((a) => a.status === "resuelta") : selectedFilter === "Mías" ? alerts.filter((_, i) => i % 3 === 0) : alerts;
 
   return (
     <div className="space-y-4 pb-20 animate-fade-in">
@@ -1001,16 +1029,38 @@ function AlertsTab() {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   TAB 5: ROLES (Admin/Comité only)
+   TAB 5: ROLES (Admin/Comité only) — FULL USER MANAGEMENT
    ═══════════════════════════════════════════════════════════ */
 
-function RolesTab({ currentUser, currentRole }: { currentUser: UserProfile; currentRole: Role }) {
+function RolesTab({
+  currentUser,
+  currentRole,
+  users,
+  onUsersChange,
+}: {
+  currentUser: UserProfile;
+  currentRole: Role;
+  users: SampleUser[];
+  onUsersChange: (users: SampleUser[]) => void;
+}) {
+  const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState<string>("all");
   const [selectedUser, setSelectedUser] = useState<SampleUser | null>(null);
   const [showRoleSelector, setShowRoleSelector] = useState(false);
+  const [showCreateUser, setShowCreateUser] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  const filteredUsers = sampleUsers.filter((u) => {
+  /* Create user form state */
+  const [newName, setNewName] = useState("");
+  const [newRole, setNewRole] = useState<string>("");
+  const [newTower, setNewTower] = useState("");
+  const [newUnit, setNewUnit] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
+
+  const filteredUsers = users.filter((u) => {
     if (search && !u.name.toLowerCase().includes(search.toLowerCase()) && !u.unit.includes(search)) return false;
     if (filterRole !== "all" && u.role !== filterRole) return false;
     return true;
@@ -1018,11 +1068,67 @@ function RolesTab({ currentUser, currentRole }: { currentUser: UserProfile; curr
 
   const maxCount = Math.max(...roleDistribution.map((r) => r.count));
 
+  /* ─── Create User ─── */
+  const handleCreateUser = async () => {
+    if (!newName.trim()) { toast({ title: "Nombre requerido", variant: "destructive" }); return; }
+    if (!newRole) { toast({ title: "Selecciona un rol", variant: "destructive" }); return; }
+    if (!newPhone.trim()) { toast({ title: "Teléfono requerido", variant: "destructive" }); return; }
+    if (!newEmail.trim()) { toast({ title: "Email requerido", variant: "destructive" }); return; }
+    setIsCreating(true);
+    try {
+      const roleData = ROLES.find((r) => r.id === newRole);
+      const newUser: SampleUser = {
+        id: `u_${Date.now()}`,
+        name: newName.trim(),
+        role: newRole as RoleId,
+        roleName: roleData?.name || "Usuario",
+        tower: newTower || "N/A",
+        unit: newUnit || "N/A",
+        phone: newPhone.trim(),
+        email: newEmail.trim(),
+        online: true,
+        memberSince: new Date().getFullYear().toString(),
+        avatarInitial: newName.trim().charAt(0).toUpperCase(),
+      };
+      onUsersChange([...users, newUser]);
+      toast({ title: "Usuario creado", description: `${newUser.name} ha sido agregado.` });
+      setNewName(""); setNewRole(""); setNewTower(""); setNewUnit(""); setNewPhone(""); setNewEmail("");
+      setShowCreateUser(false);
+    } catch {
+      toast({ title: "Error", description: "No se pudo crear el usuario.", variant: "destructive" });
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  /* ─── Change Role ─── */
+  const handleChangeRole = (userId: string, newRoleId: string) => {
+    const roleData = ROLES.find((r) => r.id === newRoleId);
+    if (!roleData) return;
+    const updated = users.map((u) => u.id === userId ? { ...u, role: newRoleId as RoleId, roleName: roleData.name } : u);
+    onUsersChange(updated);
+    setShowRoleSelector(false);
+    if (selectedUser) {
+      setSelectedUser({ ...selectedUser, role: newRoleId as RoleId, roleName: roleData.name });
+    }
+    toast({ title: "Rol actualizado", description: `El rol de ${selectedUser?.name} ha sido cambiado a ${roleData.name}.` });
+  };
+
+  /* ─── Delete User ─── */
+  const handleDeleteUser = () => {
+    if (!selectedUser) return;
+    const updated = users.filter((u) => u.id !== selectedUser.id);
+    onUsersChange(updated);
+    setShowDeleteConfirm(false);
+    setSelectedUser(null);
+    toast({ title: "Usuario eliminado", description: `${selectedUser.name} ha sido eliminado.` });
+  };
+
   return (
     <div className="space-y-4 pb-4 animate-fade-in">
       <div>
         <h1 className="text-xl font-bold text-slate-900">Gestión de Roles y Usuarios</h1>
-        <p className="text-sm text-slate-500 mt-1">Total de residentes: {communityStats.totalMembers}</p>
+        <p className="text-sm text-slate-500 mt-1">Total de residentes: {users.length}</p>
       </div>
 
       {/* Role Distribution Bar Chart */}
@@ -1081,7 +1187,7 @@ function RolesTab({ currentUser, currentRole }: { currentUser: UserProfile; curr
           filteredUsers.map((user) => {
             const role = getRole(user.role);
             return (
-              <button key={user.id} onClick={() => setSelectedUser(user)} className="w-full bg-white rounded-xl p-3 shadow-sm border border-slate-100 flex items-center gap-3 active:bg-slate-50 transition-colors text-left">
+              <button key={user.id} onClick={() => { setSelectedUser(user); setShowRoleSelector(false); }} className="w-full bg-white rounded-xl p-3 shadow-sm border border-slate-100 flex items-center gap-3 active:bg-slate-50 transition-colors text-left">
                 <div className="relative">
                   <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm" style={{ backgroundColor: role?.color || "#64748b" }}>
                     {user.avatarInitial}
@@ -1103,15 +1209,78 @@ function RolesTab({ currentUser, currentRole }: { currentUser: UserProfile; curr
 
       {/* Add User button (admin only) */}
       {currentRole.permissions.canManageUsers && (
-        <Button className="w-full bg-[#0f4c81] hover:bg-[#0a3a63] text-white rounded-xl">
+        <Button className="w-full bg-[#0f4c81] hover:bg-[#0a3a63] text-white rounded-xl" onClick={() => setShowCreateUser(true)}>
           <Plus className="w-4 h-4 mr-2" /> Agregar Usuario
         </Button>
+      )}
+
+      {/* Create User Modal */}
+      {showCreateUser && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowCreateUser(false)} />
+          <div className="relative bg-white rounded-t-3xl w-full max-w-md p-6 pb-8 space-y-4 animate-slide-up max-h-[85vh] overflow-y-auto">
+            <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto" />
+            <h3 className="text-lg font-bold text-slate-900">Crear Nuevo Usuario</h3>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-600">Nombre completo *</Label>
+                <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Ej: Juan Pérez" className="rounded-xl h-11" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-600">Rol *</Label>
+                <Select value={newRole} onValueChange={setNewRole}>
+                  <SelectTrigger className="w-full rounded-xl h-11">
+                    <SelectValue placeholder="Seleccionar rol" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ROLES.map((r) => (
+                      <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-slate-600">Torre</Label>
+                  <Select value={newTower} onValueChange={setNewTower}>
+                    <SelectTrigger className="w-full rounded-xl h-11">
+                      <SelectValue placeholder="Torre" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {towers.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-slate-600">Unidad</Label>
+                  <Input value={newUnit} onChange={(e) => setNewUnit(e.target.value)} placeholder="Ej: 101" className="rounded-xl h-11" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-600">Teléfono *</Label>
+                <Input value={newPhone} onChange={(e) => setNewPhone(e.target.value)} placeholder="+56 9 1234 5678" className="rounded-xl h-11" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-600">Email *</Label>
+                <Input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} type="email" placeholder="usuario@email.com" className="rounded-xl h-11" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Button onClick={handleCreateUser} disabled={isCreating} className="w-full bg-green-600 hover:bg-green-700 text-white rounded-xl h-11">
+                {isCreating ? "Creando..." : "Crear Usuario"}
+              </Button>
+              <Button variant="outline" onClick={() => setShowCreateUser(false)} className="w-full rounded-xl">Cancelar</Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* User Detail Bottom Sheet */}
       {selectedUser && (
         <div className="fixed inset-0 z-50 flex items-end justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setSelectedUser(null)} />
+          <div className="absolute inset-0 bg-black/40" onClick={() => { setSelectedUser(null); setShowRoleSelector(false); }} />
           <div className="relative bg-white rounded-t-3xl w-full max-w-md p-6 pb-8 space-y-4 animate-slide-up max-h-[80vh] overflow-y-auto">
             <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto" />
             <div className="flex items-center gap-4">
@@ -1164,17 +1333,58 @@ function RolesTab({ currentUser, currentRole }: { currentUser: UserProfile; curr
                 })()}
               </div>
             </div>
+
+            {/* Role change dropdown */}
             {currentRole.permissions.canManageUsers && (
-              <Button className="w-full bg-[#0f4c81] hover:bg-[#0a3a63] text-white rounded-xl" onClick={() => { setShowRoleSelector(!showRoleSelector); }}>
-                Cambiar Rol
-              </Button>
+              <div className="space-y-2">
+                <Button
+                  className="w-full bg-[#0f4c81] hover:bg-[#0a3a63] text-white rounded-xl"
+                  onClick={() => setShowRoleSelector(!showRoleSelector)}
+                >
+                  Cambiar Rol
+                </Button>
+                {showRoleSelector && (
+                  <Select
+                    value={selectedUser.role}
+                    onValueChange={(val) => handleChangeRole(selectedUser.id, val)}
+                  >
+                    <SelectTrigger className="w-full rounded-xl h-11">
+                      <SelectValue placeholder="Seleccionar nuevo rol" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ROLES.map((r) => (
+                        <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
             )}
+
+            {/* Delete user */}
             {currentRole.permissions.canManageRoles && (
-              <Button className="w-full bg-red-50 text-red-600 hover:bg-red-100 rounded-xl border border-red-200">
-                Eliminar Usuario
-              </Button>
+              <div className="space-y-2">
+                {!showDeleteConfirm ? (
+                  <Button
+                    className="w-full bg-red-50 text-red-600 hover:bg-red-100 rounded-xl border border-red-200"
+                    onClick={() => setShowDeleteConfirm(true)}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" /> Eliminar Usuario
+                  </Button>
+                ) : (
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-3">
+                    <p className="text-sm font-semibold text-red-800">¿Eliminar a {selectedUser.name}?</p>
+                    <p className="text-xs text-red-600">Esta acción no se puede deshacer.</p>
+                    <div className="flex gap-2">
+                      <Button onClick={handleDeleteUser} className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl h-10 text-sm">Confirmar</Button>
+                      <Button variant="outline" onClick={() => setShowDeleteConfirm(false)} className="flex-1 rounded-xl h-10 text-sm">Cancelar</Button>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
-            <Button variant="outline" onClick={() => setSelectedUser(null)} className="w-full rounded-xl">Cerrar</Button>
+
+            <Button variant="outline" onClick={() => { setSelectedUser(null); setShowRoleSelector(false); }} className="w-full rounded-xl">Cerrar</Button>
           </div>
         </div>
       )}
@@ -1186,7 +1396,7 @@ function RolesTab({ currentUser, currentRole }: { currentUser: UserProfile; curr
    TAB 6: ADMIN (Admin/Comité/Super Admin)
    ═══════════════════════════════════════════════════════════ */
 
-function AdminTab({ currentRole }: { currentRole: Role }) {
+function AdminTab({ currentRole, alerts }: { currentRole: Role; alerts: Alert[] }) {
   return (
     <div className="space-y-5 pb-4 animate-fade-in">
       <div>
@@ -1271,7 +1481,7 @@ function AdminTab({ currentRole }: { currentRole: Role }) {
             <button className="text-xs text-[#0f4c81] font-medium">Ver Todos</button>
           </div>
           <div className="space-y-2">
-            {mockAlerts.slice(0, 4).map((a) => (
+            {alerts.slice(0, 4).map((a) => (
               <div key={a.id} className="bg-white rounded-xl border border-slate-200 p-3 flex items-start gap-3">
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${a.status === "activa" ? "bg-red-100 text-red-600" : a.status === "en_revision" ? "bg-amber-100 text-amber-600" : "bg-green-100 text-green-600"}`}>
                   <CategoryIcon name={a.categoryIcon} size={16} />
@@ -1556,7 +1766,13 @@ export default function HomePage() {
   const [showInstallGuide, setShowInstallGuide] = useState(false);
   const deferredPrompt = useRef<any>(null);
 
-  // PWA install prompt
+  /* ─── STATEFUL ALERTS ─── */
+  const [alerts, setAlerts] = useState<Alert[]>(mockAlerts);
+
+  /* ─── STATEFUL USERS ─── */
+  const [users, setUsers] = useState<SampleUser[]>(sampleUsers);
+
+  /* PWA install prompt */
   useEffect(() => {
     const dismissed = localStorage.getItem(INSTALL_DISMISSED_KEY);
     const isStandalone = window.matchMedia("(display-mode: standalone)").matches;
@@ -1625,15 +1841,20 @@ export default function HomePage() {
     setActiveTab(tab);
   }, []);
 
+  /* ─── Report submitted callback ─── */
+  const handleReportSubmitted = useCallback((alert: Alert) => {
+    setAlerts((prev) => [alert, ...prev]);
+  }, []);
+
   const renderTabContent = () => {
-    if (!role) return null;
+    if (!role || !currentUser) return null;
     switch (activeTab) {
-      case "home": return <HomeTab currentUser={currentUser} currentRole={role} onNavigate={handleNavigate} onSOSActivate={() => setSosActive(true)} />;
-      case "report": return <ReportTab onNavigate={handleNavigate} />;
+      case "home": return <HomeTab currentUser={currentUser} currentRole={role} alerts={alerts} onNavigate={handleNavigate} onSOSActivate={() => setSosActive(true)} />;
+      case "report": return <ReportTab onNavigate={handleNavigate} onReportSubmitted={handleReportSubmitted} />;
       case "map": return <MapTab />;
-      case "alerts": return <AlertsTab />;
-      case "roles": return <RolesTab currentUser={currentUser} currentRole={role} />;
-      case "admin": return <AdminTab currentRole={role} />;
+      case "alerts": return <AlertsTab alerts={alerts} />;
+      case "roles": return <RolesTab currentUser={currentUser} currentRole={role} users={users} onUsersChange={setUsers} />;
+      case "admin": return <AdminTab currentRole={role} alerts={alerts} />;
       case "profile": return <ProfileTab currentUser={currentUser} currentRole={role} onLogout={handleLogout} onSwitchRole={handleSwitchRole} />;
       default: return null;
     }
@@ -1648,7 +1869,7 @@ export default function HomePage() {
     <div className="min-h-screen bg-slate-100 flex justify-center">
       <div className="w-full max-w-md bg-slate-50 min-h-screen relative flex flex-col shadow-none md:shadow-2xl md:rounded-[2.5rem] md:border md:border-slate-200 overflow-hidden">
         {/* Top Bar */}
-        <TopBar currentUser={currentUser} currentRole={role!} onNavigate={handleNavigate} />
+        <TopBar currentUser={currentUser!} currentRole={role!} onNavigate={handleNavigate} />
 
         {/* Tab content */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide">

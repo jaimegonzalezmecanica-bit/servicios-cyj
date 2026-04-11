@@ -163,3 +163,42 @@ Built a complete mobile-first Progressive Web App (PWA) for VigilApp, replicatin
 - shadcn/ui components (Button, Input, Textarea, Badge, Switch, Label, Toast)
 - Lucide React icons (30+ icon imports)
 - ESLint passes with zero errors
+
+---
+
+Task ID: fix-core-features
+Agent: full-stack-developer
+Task: Fix reports, user management, and map functionality
+
+Work Log:
+- Created /api/users/route.ts with GET/POST/PUT/DELETE for user CRUD operations
+- Made alerts stateful in HomePage component (initialized from mockAlerts)
+- Added handleReportSubmitted callback: new reports immediately appear in alerts list
+- Passed live alerts state to HomeTab (recent alerts), AlertsTab, and AdminTab
+- Added users stateful management in HomePage (initialized from sampleUsers)
+- Added "Create User" modal form in RolesTab with fields: name, role (select), tower (select), unit, phone, email
+- Added role change dropdown (shadcn/ui Select) when clicking "Cambiar Rol" in user detail sheet
+- Added delete user confirmation dialog with confirm/cancel buttons
+- Installed leaflet, react-leaflet, @types/leaflet packages
+- Created /src/components/map-view.tsx with real Leaflet interactive map
+- Map centered on Santiago, Chile (-33.4489, -70.6693) with OpenStreetMap tiles
+- Towers A-F shown as blue building markers with popup labels
+- Incident markers colored by severity (red=critical, orange=warning, blue=info)
+- Condominium perimeter shown as dashed polygon overlay
+- "You are here" marker with blue dot
+- Map filter chips (Todos, Hoy, Críticos, Resueltos) filter incident markers
+- Used next/dynamic for SSR-safe Leaflet loading
+- Fixed indentation bug on original line 273 (p tag was at column 0)
+- Removed unused InfoIcon component (replaced by SVG in Leaflet markers)
+- Removed unused imports: Calendar, Wrench
+- Added Trash2 import for delete button icon
+- Added Select component imports from shadcn/ui
+- Added Leaflet CSS overrides in globals.css
+- ESLint passes with 0 errors
+
+Stage Summary:
+- Reports now appear immediately in the alerts list after submission
+- Users can be created via modal form, role-changed via dropdown, and deleted via confirmation dialog
+- Map shows real interactive Leaflet map with towers, incidents, and perimeter
+- All text remains in Spanish
+- ESLint passes with 0 errors
