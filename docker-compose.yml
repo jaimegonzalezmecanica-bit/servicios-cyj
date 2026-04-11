@@ -1,0 +1,20 @@
+services:
+  cyj-server:
+    build: .
+    container_name: cyj-server
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:/app/data/custom.db
+    volumes:
+      - cyj-data:/app/data
+    restart: always
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/alerts', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  cyj-data:

@@ -1,4 +1,33 @@
 ---
+Task ID: 3
+Agent: Main Agent
+Task: Buscar servidor gratis y preparar despliegue en la nube
+
+Work Log:
+- Searched 6 web queries for best free Node.js hosting 2025-2026
+- Compared Oracle Cloud Always Free, Koyeb Free, Render Free
+- Created `Dockerfile` - Multi-stage build for production (node:20-slim)
+- Created `.dockerignore` - Excludes node_modules, android, ios, etc.
+- Created `docker-compose.yml` - One-click deployment with persistent volume
+- Created `ecosystem.config.cjs` - PM2 config for VPS deployment (auto-restart)
+- Created `GUIA-SERVIDOR-GRATIS.md` - Complete step-by-step guide with 3 options:
+  - Oracle Cloud Always Free (RECOMMENDED): 4 ARM cores, 24GB RAM, 200GB, 24/7
+  - Koyeb Free: No credit card, Git deploy, but sleeps when inactive
+  - Render Free: No credit card, but sleeps after 15 min
+- Updated `package.json` scripts:
+  - `start` now uses `node` (works on any server, not just bun)
+  - Added `start:bun` for local bun usage
+  - Added `deploy:build` (prisma generate + db push + next build)
+  - Added `deploy:pm2` (start/restart with PM2 process manager)
+- Created `.env.production` with production DATABASE_URL path
+
+Stage Summary:
+- Oracle Cloud Always Free is the BEST option: FREE FOREVER, 24/7, 200GB disk
+- All deployment files ready: Dockerfile, docker-compose, PM2 config
+- Complete guide in GUIA-SERVIDOR-GRATIS.md with step-by-step instructions
+- User just needs to: create Oracle account → create instance → upload files → run commands
+- Koyeb and Render as easier alternatives (but less reliable for 24/7)
+---
 Task ID: 2
 Agent: Main Agent
 Task: Resolver problema de IP/servidor - Hacer configurable la URL del servidor desde la app

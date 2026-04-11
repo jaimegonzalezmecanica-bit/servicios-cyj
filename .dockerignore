@@ -1,0 +1,16 @@
+node_modules/
+.next/
+.git/
+.gitignore
+*.md
+android/
+ios/
+build-apk.sh
+deploy-server.sh
+*.log
+*.apk
+.env
+.env.local
+db/
+data/
+tmp/
