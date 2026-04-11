@@ -167,27 +167,109 @@ function CategoryIcon({ name, size = 18 }: { name: string; size?: number }) {
   }
 }
 
-/* SOS sound: short alarm beep using Web Audio API */
-function playSOSSound(): void {
+/* ═══════════════════════════════════════════════════════════
+   AUDIO NOTIFICATIONS - Web Audio API
+   ═══════════════════════════════════════════════════════════ */
+
+let _audioCtx: AudioContext | null = null;
+function getAudioContext(): AudioContext | null {
   try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const playBeep = (startTime: number, freq: number, duration: number) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.frequency.value = freq;
-      osc.type = "square";
-      gain.gain.setValueAtTime(0.15, startTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
-      osc.start(startTime);
-      osc.stop(startTime + duration);
-    };
+    if (!_audioCtx) {
+      _audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    if (_audioCtx.state === "suspended") {
+      _audioCtx.resume();
+    }
+    return _audioCtx;
+  } catch {
+    return null;
+  }
+}
+
+function playTone(
+  ctx: AudioContext,
+  startTime: number,
+  freq: number,
+  duration: number,
+  type: OscillatorType = "square",
+  volume: number = 0.15,
+  ramp: boolean = true,
+) {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.frequency.value = freq;
+  osc.type = type;
+  gain.gain.setValueAtTime(volume, startTime);
+  if (ramp) {
+    gain.gain.setValueAtTime(volume, startTime + duration * 0.6);
+    gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+  } else {
+    gain.gain.setValueAtTime(volume, startTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+  }
+  osc.start(startTime);
+  osc.stop(startTime + duration + 0.05);
+}
+
+/**
+ * SOS Sound: Urgent alarm — two-tone siren pattern repeating 3 times
+ * High-pitched, staccato, impossible to ignore
+ */
+function playSOSSound(): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  try {
     const now = ctx.currentTime;
-    // SOS pattern: 3 short, 3 long, 3 short
-    for (let i = 0; i < 3; i++) { playBeep(now + i * 0.2, 880, 0.12); }
-    for (let i = 0; i < 3; i++) { playBeep(now + 0.8 + i * 0.35, 880, 0.25); }
-    for (let i = 0; i < 3; i++) { playBeep(now + 2.0 + i * 0.2, 880, 0.12); }
+    // Repeat siren pattern 3 times
+    for (let rep = 0; rep < 3; rep++) {
+      const base = now + rep * 1.6;
+      // Rising two-tone: LOW → HIGH (urgent siren)
+      for (let i = 0; i < 3; i++) {
+        playTone(ctx, base + i * 0.15, 600, 0.12, "sawtooth", 0.18);
+        playTone(ctx, base + i * 0.15 + 0.08, 900, 0.10, "square", 0.15);
+      }
+      // Rapid SOS beep: 3 short - 3 long - 3 short
+      const bp = base + 0.55;
+      for (let i = 0; i < 3; i++) { playTone(ctx, bp + i * 0.18, 1000, 0.10, "square", 0.20); }
+      for (let i = 0; i < 3; i++) { playTone(ctx, bp + 0.65 + i * 0.30, 1000, 0.22, "square", 0.20); }
+      for (let i = 0; i < 3; i++) { playTone(ctx, bp + 1.65 + i * 0.18, 1000, 0.10, "square", 0.20); }
+    }
+  } catch { /* Audio not available */ }
+}
+
+/**
+ * Alert Sound: Professional notification chime — pleasant two-tone bell
+ * Used for regular community alerts (non-SOS)
+ */
+function playAlertSound(): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  try {
+    const now = ctx.currentTime;
+    // First chime: C5 → E5 (pleasant major third)
+    playTone(ctx, now, 523.25, 0.35, "sine", 0.20);        // C5
+    playTone(ctx, now + 0.12, 659.25, 0.30, "sine", 0.18); // E5
+    // Second chime: E5 → G5 (ascending)
+    playTone(ctx, now + 0.45, 659.25, 0.30, "sine", 0.18); // E5
+    playTone(ctx, now + 0.57, 783.99, 0.35, "sine", 0.20); // G5
+    // Final ring: high C6 with sustain
+    playTone(ctx, now + 0.95, 1046.50, 0.50, "sine", 0.12); // C6
+  } catch { /* Audio not available */ }
+}
+
+/**
+ * Generic notification ping — short soft beep
+ * Used for minor events (status changes, etc.)
+ */
+function playNotifSound(): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  try {
+    const now = ctx.currentTime;
+    playTone(ctx, now, 800, 0.12, "sine", 0.10);
+    playTone(ctx, now + 0.15, 1000, 0.15, "sine", 0.10);
   } catch { /* Audio not available */ }
 }
 
@@ -1269,6 +1351,10 @@ function AlertsTab({ alerts, currentRole, onAlertsChange, onNavigateToMapAlert }
       const data = await res.json();
       if (data.success) {
         onAlertsChange(alerts.map((a) => (a.id === alertId ? { ...a, status: newStatus } : a)));
+        // Play confirmation sound on status change
+        if (newStatus === "resuelta") {
+          playNotifSound();
+        }
       }
     } catch (e) {
       console.error("Error changing alert status:", e);
@@ -2783,52 +2869,83 @@ export default function HomePage() {
     }
   }, [currentUser]);
 
-  /* ─── SOS POLLING: Check for new SOS alerts from other devices ─── */
+  /* ─── ALERTS POLLING: Check for new SOS and regular alerts from other devices ─── */
   useEffect(() => {
     if (!isLoggedIn) return;
     let lastSOSId: string | null = null;
+    let lastAlertIds: Set<string> = new Set();
 
-    const pollSOS = () => {
+    // Initialize known alert IDs from current state
+    const initIds = () => {
+      lastAlertIds = new Set(alerts.map((a) => a.id));
+      const newestSOS = alerts.find((a) => a.category === "sos" && a.status === "activa" && a.priority === "critical");
+      if (newestSOS) lastSOSId = newestSOS.id;
+    };
+    initIds();
+
+    const pollAlerts = () => {
       fetch("/api/alerts")
         .then((r) => r.json())
         .then((data) => {
           const alertList: Alert[] = data.alerts || data;
           if (!Array.isArray(alertList)) return;
-          // Find the newest SOS alert that we didn't send
-          const sosAlerts = alertList.filter(
-            (a: Alert) => a.category === "sos" && a.status === "activa" && a.priority === "critical"
-          );
-          if (sosAlerts.length > 0) {
-            const newest = sosAlerts[0];
-            if (newest.id !== lastSOSId) {
-              lastSOSId = newest.id;
-              // Only show as incoming if it's NOT from current user (check by description)
-              const isOwnSOS = newest.description?.includes(currentUser?.name || "");
-              if (!isOwnSOS && !sosActive) {
-                setIncomingSOS({
-                  lat: newest.lat || -33.3298,
-                  lng: newest.lng || -70.7630,
-                  userName: newest.description?.split(" - ")[1]?.split(" (")[0]?.trim() || "Residente",
-                  conjunto: newest.description?.match(/\(([^)]+)\)/)?.[1] || "",
-                  time: newest.time,
-                });
-                // Play SOS alarm sound
-                playSOSSound();
-                // Also update alerts list
-                setAlerts(alertList);
-              } else {
-                setAlerts(alertList);
-              }
+
+          // Detect new alert IDs (not yet in our known set)
+          const remoteIds = new Set(alertList.map((a) => a.id));
+          const newIds: string[] = [];
+          for (const id of remoteIds) {
+            if (!lastAlertIds.has(id)) {
+              newIds.push(id);
             }
           }
+
+          if (newIds.length > 0) {
+            // Classify new alerts
+            const newSOSAlerts = newIds.map((id) => alertList.find((a) => a.id === id)).filter((a): a is Alert => !!a && a.category === "sos" && a.status === "activa" && a.priority === "critical");
+            const newRegularAlerts = newIds.map((id) => alertList.find((a) => a.id === id)).filter((a): a is Alert => !!a && a.category !== "sos");
+
+            // Handle new SOS alerts
+            for (const sos of newSOSAlerts) {
+              if (sos.id !== lastSOSId) {
+                lastSOSId = sos.id;
+                const isOwnSOS = sos.description?.includes(currentUser?.name || "");
+                if (!isOwnSOS && !sosActive) {
+                  setIncomingSOS({
+                    lat: sos.lat || -33.3298,
+                    lng: sos.lng || -70.7630,
+                    userName: sos.description?.split(" - ")[1]?.split(" (")[0]?.trim() || "Residente",
+                    conjunto: sos.description?.match(/\(([^)]+)\)/)?.[1] || "",
+                    time: sos.time,
+                  });
+                  // Play urgent SOS alarm sound
+                  playSOSSound();
+                }
+              }
+            }
+
+            // Handle new regular (non-SOS) alerts
+            if (newRegularAlerts.length > 0) {
+              const isOwnAlert = newRegularAlerts.some((a) => a.description?.includes(currentUser?.name || ""));
+              if (!isOwnAlert) {
+                // Play pleasant notification chime for regular alerts
+                playAlertSound();
+              }
+            }
+
+            // Update known IDs
+            lastAlertIds = remoteIds;
+          }
+
+          // Always update alerts list
+          setAlerts(alertList);
         })
         .catch(() => { /* silent */ });
     };
 
-    // Poll every 5 seconds for new SOS alerts
-    const interval = setInterval(pollSOS, 5000);
+    // Poll every 5 seconds for new alerts
+    const interval = setInterval(pollAlerts, 5000);
     // Initial check
-    pollSOS();
+    pollAlerts();
     return () => clearInterval(interval);
   }, [isLoggedIn, sosActive, currentUser]);
 
@@ -2925,6 +3042,8 @@ export default function HomePage() {
   /* ─── Report submitted callback ─── */
   const handleReportSubmitted = useCallback((alert: Alert) => {
     setAlerts((prev) => [alert, ...prev]);
+    // Play notification sound for the submitted report
+    playNotifSound();
   }, []);
 
   /* Compute active SOS alerts for persistent map markers */
