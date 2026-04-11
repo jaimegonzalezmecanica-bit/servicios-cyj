@@ -1044,9 +1044,36 @@ function MapTab() {
    TAB 4: ALERTS (stateful)
    ═══════════════════════════════════════════════════════════ */
 
-function AlertsTab({ alerts }: { alerts: Alert[] }) {
+function AlertsTab({ alerts, currentRole, onAlertsChange }: { alerts: Alert[]; currentRole?: Role; onAlertsChange: (alerts: Alert[]) => void }) {
   const [selectedFilter, setSelectedFilter] = useState("Todas");
+  const [changingId, setChangingId] = useState<string | null>(null);
+  const canManage = currentRole?.permissions?.canManageAlerts === true;
   const filteredAlerts = selectedFilter === "Activas" ? alerts.filter((a) => a.status === "activa") : selectedFilter === "Resueltas" ? alerts.filter((a) => a.status === "resuelta") : selectedFilter === "Mías" ? alerts.filter((_, i) => i % 3 === 0) : alerts;
+
+  const handleChangeStatus = async (alertId: string, newStatus: "activa" | "en_revision" | "resuelta") => {
+    setChangingId(alertId);
+    try {
+      const res = await fetch("/api/alert", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ alertId, status: newStatus }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        onAlertsChange(alerts.map((a) => (a.id === alertId ? { ...a, status: newStatus } : a)));
+      }
+    } catch (e) {
+      console.error("Error changing alert status:", e);
+    } finally {
+      setChangingId(null);
+    }
+  };
+
+  const statusOptions: { value: "activa" | "en_revision" | "resuelta"; label: string; color: string; bg: string }[] = [
+    { value: "activa", label: "Activa", color: "text-red-600", bg: "bg-red-50 border-red-200 hover:bg-red-100" },
+    { value: "en_revision", label: "En revisión", color: "text-amber-600", bg: "bg-amber-50 border-amber-200 hover:bg-amber-100" },
+    { value: "resuelta", label: "Resuelta", color: "text-green-600", bg: "bg-green-50 border-green-200 hover:bg-green-100" },
+  ];
 
   return (
     <div className="space-y-4 pb-20 animate-fade-in">
@@ -1086,6 +1113,25 @@ function AlertsTab({ alerts }: { alerts: Alert[] }) {
                     <span className="text-[11px] text-slate-400 flex items-center gap-1"><MessageSquare className="w-3 h-3" /> {alert.comments}</span>
                   </div>
                   {alert.isAnonymous && <span className="text-[10px] text-slate-400 mt-1 flex items-center gap-1"><User className="w-3 h-3" /> Anónimo</span>}
+                  {canManage && (
+                    <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-slate-100">
+                      <span className="text-[10px] text-slate-400 mr-1">Cambiar estado:</span>
+                      {statusOptions.map((opt) => (
+                        <button
+                          key={opt.value}
+                          disabled={changingId === alert.id || alert.status === opt.value}
+                          onClick={() => handleChangeStatus(alert.id, opt.value)}
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-semibold border transition-all active:scale-95 ${
+                            alert.status === opt.value
+                              ? `${opt.bg} ${opt.color} ring-1 ring-current opacity-70 cursor-default`
+                              : `${opt.bg} ${opt.color} cursor-pointer`
+                          }`}
+                        >
+                          {changingId === alert.id ? "..." : opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -2186,7 +2232,7 @@ export default function HomePage() {
       case "home": return <HomeTab currentUser={currentUser} currentRole={role} alerts={alerts} announcements={announcementsList} onNavigate={handleNavigate} onSOSActivate={() => setSosActive(true)} />;
       case "report": return <ReportTab onNavigate={handleNavigate} onReportSubmitted={handleReportSubmitted} />;
       case "map": return <MapTab />;
-      case "alerts": return <AlertsTab alerts={alerts} />;
+      case "alerts": return <AlertsTab alerts={alerts} currentRole={role} onAlertsChange={setAlerts} />;
       case "roles": return <RolesTab currentUser={currentUser} currentRole={role} users={users} onUsersChange={setUsers} />;
       case "admin": return <AdminTab currentRole={role} alerts={alerts} announcements={announcementsList} onAnnouncementsChange={setAnnouncementsList} guards={guardsList} onGuardsChange={setGuardsList} currentUser={currentUser} />;
       case "profile": return <ProfileTab currentUser={currentUser} currentRole={role} onLogout={handleLogout} onSwitchRole={handleSwitchRole} />;

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { addAlert, getAllAlerts } from "@/lib/store";
+import { addAlert, getAllAlerts, updateAlertStatus } from "@/lib/store";
 import { reportCategories } from "@/lib/mock-data";
 
 export async function POST(request: NextRequest) {
@@ -43,6 +43,43 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json(
       { success: false, error: "Error al crear alerta" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { alertId, status } = body;
+
+    if (!alertId || !status) {
+      return NextResponse.json(
+        { success: false, error: "alertId y status son requeridos" },
+        { status: 400 }
+      );
+    }
+
+    const validStatuses = ["activa", "en_revision", "resuelta"];
+    if (!validStatuses.includes(status)) {
+      return NextResponse.json(
+        { success: false, error: "Estado inválido. Use: activa, en_revision, resuelta" },
+        { status: 400 }
+      );
+    }
+
+    const updated = updateAlertStatus(alertId, status);
+    if (!updated) {
+      return NextResponse.json(
+        { success: false, error: "Alerta no encontrada" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ success: true, alert: updated });
+  } catch {
+    return NextResponse.json(
+      { success: false, error: "Error al actualizar alerta" },
       { status: 500 }
     );
   }

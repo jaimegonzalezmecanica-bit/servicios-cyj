@@ -221,3 +221,22 @@ Work Log:
 
 Stage Summary:
 - All 4 issues resolved: announcements, shifts, photos, location
+
+---
+Task ID: fix-alert-status-change
+Agent: main
+Task: Fix inability to change alert status
+
+Work Log:
+- Root cause: AlertsTab only displayed alert status but had no UI to change it, and /api/alert had no PUT endpoint
+- Added PUT method to /api/alert/route.ts: accepts alertId + status, validates status (activa/en_revision/resuelta), calls updateAlertStatus from store
+- Updated AlertsTab component: added currentRole and onAlertsChange props
+- Added status change UI: 3 colored buttons (Activa, En revisión, Resuelta) with RBAC permission check (canManageAlerts)
+- Buttons show current state as selected/disabled, loading state while changing
+- Updated AlertsTab invocation to pass role and setAlerts callback
+- API tested via curl: PUT /api/alert correctly changes status and persists
+
+Stage Summary:
+- Alert status change now works for roles with canManageAlerts permission (Super Admin, Admin, Comité, Guardia)
+- Residents and visitors see alerts as read-only (no status buttons)
+- All 3 statuses supported: Activa, En revisión, Resuelta
