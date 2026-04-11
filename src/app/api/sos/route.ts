@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ensureSeeded, addAlert } from "@/lib/store";
+import { eventBus } from "@/lib/event-bus";
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,6 +31,18 @@ export async function POST(request: NextRequest) {
 
     const saved = await addAlert(newAlert);
     console.log(`[API /sos] *** SOS ACTIVATED by ${userName || 'unknown'} at ${lat}, ${lng} ***`);
+
+    // ─── BROADCAST SOS TO ALL CONNECTED DEVICES IN REAL-TIME ───
+    // This triggers the SOS alarm sound on every connected phone/tablet
+    eventBus.broadcast("sos", {
+      alert: saved,
+      message: "ALERTA SOS ACTIVADA",
+      triggerUser: userName || "Residente",
+      conjunto: conjunto || "",
+      lat: typeof lat === "number" ? lat : -33.3276,
+      lng: typeof lng === "number" ? lng : -70.7630,
+      time: timeStr,
+    });
 
     return NextResponse.json({
       success: true,

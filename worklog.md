@@ -1,36 +1,23 @@
 ---
 Task ID: 1
 Agent: Main Agent
-Task: Fix SOS alerts not working between devices and map position issues
+Task: Implementar sistema de notificaciones en tiempo real (SSE) y deployment para servidor siempre online
 
 Work Log:
-- Read and analyzed all key files: page.tsx, map-view.tsx, offline-api.ts, mock-data.ts, store.ts
-- Identified SOS root cause: SOS activation only set local React state, never called any API to persist the alert
-- Identified `/api/alerts` GET endpoint bug: returned static mockAlerts from mock-data.ts, never saw new alerts
-- Identified `/api/alert` POST bug: didn't accept lat/lng from request body
-- Identified `/api/sos` POST bug: only returned success, didn't create an alert in the store
-
-SOS Fixes Applied:
-1. Created `handleSOSActivate` callback that: activates SOS overlay + gets geolocation + calls `/api/alert` POST with category "sos", priority "critical", lat/lng coordinates
-2. Added SOS polling mechanism (every 5 seconds) that checks `/api/alerts` for new SOS alerts
-3. Added incoming SOS notification banner with "Ver en Mapa" button
-4. Added SOS alarm sound using Web Audio API (3 short - 3 long - 3 short beep pattern)
-5. Updated `/api/alerts/route.ts` to use `getAllAlerts()` from store instead of static mockAlerts
-6. Updated `/api/alert/route.ts` to accept lat/lng and handle SOS category properly
-7. Updated `/api/sos/route.ts` to actually create an alert in the shared store
-8. Updated `offline-api.ts` handleAlert to support GET method and save SOS data to localStorage
-9. Added special SOS visual treatment in alert cards (red pulse, SOS badge)
-10. Made TopBar notification badge dynamic (count of active alerts)
-
-Map Position Fixes:
-1. Enhanced towers loading to merge API data with localStorage saved positions
-2. Added triple fallback: localStorage positions → API positions → default mock positions
-3. Offline-api tower GET handler ensures saved positions are always respected
+- Created `/src/lib/event-bus.ts` - In-memory event broadcaster for Server-Sent Events
+- Created `/src/app/api/events/route.ts` - SSE endpoint for real-time notifications
+- Updated `/src/app/api/sos/route.ts` - Now broadcasts SOS to ALL connected devices
+- Updated `/src/app/api/alert/route.ts` - Now broadcasts alerts and status changes
+- Updated `/src/app/api/map-config/route.ts` - Now broadcasts map changes
+- Updated `/src/app/page.tsx` - Replaced polling with SSE + polling fallback
+- Created `deploy-server.sh` - Systemd deployment script for 24/7 server
+- Updated `build-apk.sh` - Better documentation and URL configuration
+- Updated `Caddyfile` - Reverse proxy with SSE support and HTTPS guide
+- Built APK (9.5MB) at download/Servicios-CyJ.apk
 
 Stage Summary:
-- SOS now persists alerts to the shared store (web) and localStorage (offline)
-- Other devices polling `/api/alerts` every 5 seconds will detect new SOS alerts
-- Incoming SOS shows notification banner with alarm sound
-- SOS alerts show on map with pulsing red marker
-- Map positions are protected with multiple fallback layers
-- All source files pass ESLint with no errors
+- SOS now sounds on ALL connected devices instantly via SSE (not just polling)
+- Map sync works via /api/map-config (perimeter + entrance shared across devices)
+- Server can be deployed 24/7 using deploy-server.sh (systemd service)
+- APK built with placeholder URL that needs to be configured with real server IP
+- Caddyfile ready for HTTPS reverse proxy setup

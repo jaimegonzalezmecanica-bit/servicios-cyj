@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ensureSeeded, addAlert, getAllAlerts, updateAlertStatus, updateAlertResponse } from "@/lib/store";
 import { reportCategories } from "@/lib/mock-data";
+import { eventBus } from "@/lib/event-bus";
 
 export async function POST(request: NextRequest) {
   try {
@@ -43,6 +44,26 @@ export async function POST(request: NextRequest) {
 
     const saved = await addAlert(newAlert);
     console.log(`[API /alert] Created alert ${saved.id} (${saved.category}) by ${userName || 'anonymous'}`);
+
+    // ─── BROADCAST TO ALL CONNECTED DEVICES IN REAL-TIME ───
+    if (isSOS) {
+      // SOS gets the urgent broadcast (triggers alarm on ALL devices)
+      eventBus.broadcast("sos", {
+        alert: saved,
+        message: "ALERTA SOS ACTIVADA",
+        triggerUser: userName || "Residente",
+        conjunto: userConjunto || "",
+        lat: typeof lat === "number" ? lat : -33.3276,
+        lng: typeof lng === "number" ? lng : -70.7630,
+        time: saved.time,
+      });
+    } else {
+      // Regular alerts get a notification broadcast
+      eventBus.broadcast("alert", {
+        alert: saved,
+        message: "Nueva alerta de la comunidad",
+      });
+    }
 
     return NextResponse.json({
       success: true,
@@ -92,6 +113,14 @@ export async function PUT(request: NextRequest) {
     }
 
     console.log(`[API /alert] Updated alert ${alertId} → ${status}`);
+
+    // ─── BROADCAST STATUS CHANGE TO ALL DEVICES ───
+    eventBus.broadcast("alert-update", {
+      alertId,
+      status,
+      responseText,
+      message: `Alerta actualizada: ${status}`,
+    });
 
     return NextResponse.json({ success: true, alert: updated });
   } catch (error) {

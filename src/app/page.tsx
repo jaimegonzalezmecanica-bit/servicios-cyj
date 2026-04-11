@@ -3227,20 +3227,117 @@ export default function HomePage() {
     }
   }, [currentUser]);
 
-  /* ─── ALERTS POLLING: Check for new SOS and regular alerts from other devices ─── */
+  /* ─── REAL-TIME EVENTS: SSE (Server-Sent Events) + polling fallback ─── */
+  /* When ANY device triggers SOS or creates an alert, ALL connected devices
+     receive the event INSTANTLY via SSE and play the alarm sound.
+     This replaces the old polling-only mechanism. */
   useEffect(() => {
     if (!isLoggedIn) return;
+
     let lastSOSId: string | null = null;
-    let lastAlertIds: Set<string> = new Set();
+    let knownIds: Set<string> = new Set(alerts.map((a) => a.id));
+    const newestSOS = alerts.find((a) => a.category === "sos" && a.status === "activa" && a.priority === "critical");
+    if (newestSOS) lastSOSId = newestSOS.id;
 
-    // Initialize known alert IDs from current state
-    const initIds = () => {
-      lastAlertIds = new Set(alerts.map((a) => a.id));
-      const newestSOS = alerts.find((a) => a.category === "sos" && a.status === "activa" && a.priority === "critical");
-      if (newestSOS) lastSOSId = newestSOS.id;
-    };
-    initIds();
+    // ─── SSE: Real-time connection to server for instant notifications ───
+    let eventSource: EventSource | null = null;
+    let reconnectTimeout: NodeJS.Timeout | null = null;
+    let reconnectAttempts = 0;
+    const maxReconnectDelay = 30000;
 
+    function connectSSE() {
+      try {
+        // Build SSE URL (use server URL for native apps)
+        const baseUrl = (typeof window !== "undefined" && (window as any).__CYJ_SERVER_URL__) || "";
+        const sseUrl = `${baseUrl}/api/events`;
+        eventSource = new EventSource(sseUrl);
+        reconnectAttempts = 0;
+
+        eventSource.addEventListener("connected", (e) => {
+          const data = JSON.parse(e.data);
+          console.log(`[SSE] Connected to real-time server (clients: ${data.clientsConnected})`);
+        });
+
+        eventSource.addEventListener("cyj-notification", (e) => {
+          try {
+            const event = JSON.parse(e.data);
+            const { type, data: eventData } = event;
+
+            if (type === "sos") {
+              // ─── SOS EVENT: Play alarm on ALL connected devices ───
+              const alertData = eventData.alert;
+              if (!alertData) return;
+
+              // Don't play if it's our own SOS (already playing locally)
+              const isOwnSOS = alertData.description?.includes(currentUser?.name || "");
+              if (!isOwnSOS && !sosActive) {
+                console.log(`[SSE] SOS received from ${eventData.triggerUser} — playing alarm!`);
+                setIncomingSOS({
+                  lat: eventData.lat || alertData.lat || -33.3298,
+                  lng: eventData.lng || alertData.lng || -70.7630,
+                  userName: eventData.triggerUser || "Residente",
+                  conjunto: eventData.conjunto || "",
+                  time: eventData.time || alertData.time,
+                });
+                // Play the urgent SOS alarm sound IMMEDIATELY
+                playSOSSound();
+              }
+
+              // Update alerts list
+              if (alertData.id && !knownIds.has(alertData.id)) {
+                knownIds.add(alertData.id);
+                setAlerts((prev) => [alertData, ...prev]);
+              }
+            } else if (type === "alert") {
+              // ─── NEW REGULAR ALERT ───
+              const alertData = eventData.alert;
+              if (alertData && alertData.id && !knownIds.has(alertData.id)) {
+                knownIds.add(alertData.id);
+                setAlerts((prev) => [alertData, ...prev]);
+                const isOwnAlert = alertData.description?.includes(currentUser?.name || "");
+                if (!isOwnAlert) {
+                  playAlertSound();
+                }
+              }
+            } else if (type === "alert-update") {
+              // ─── ALERT STATUS CHANGE ───
+              const { alertId, status: newStatus } = eventData;
+              if (alertId) {
+                setAlerts((prev) => prev.map((a) => a.id === alertId ? { ...a, status: newStatus } : a));
+                playNotifSound();
+              }
+            } else if (type === "map-update") {
+              // ─── MAP CONFIG CHANGED BY ADMIN ───
+              const { key: mapKey, value: mapValue } = eventData;
+              if (mapKey === "perimeter" && Array.isArray(mapValue) && mapValue.length >= 3) {
+                setMapPerimeter(mapValue);
+              } else if (mapKey === "entrance" && mapValue?.lat) {
+                setMapEntrance(mapValue);
+              }
+            }
+          } catch (err) {
+            console.error("[SSE] Error parsing event:", err);
+          }
+        });
+
+        eventSource.onerror = () => {
+          console.warn("[SSE] Connection lost, reconnecting...");
+          eventSource?.close();
+          reconnectAttempts++;
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), maxReconnectDelay);
+          reconnectTimeout = setTimeout(connectSSE, delay);
+        };
+      } catch {
+        // SSE not available — polling fallback handles it
+        console.warn("[SSE] Cannot connect, using polling fallback");
+      }
+    }
+
+    // Start SSE connection
+    connectSSE();
+
+    // ─── POLLING FALLBACK: Check for new alerts every 8 seconds ───
+    // This ensures we don't miss anything if SSE temporarily disconnects
     const pollAlerts = () => {
       fetch("/api/alerts")
         .then((r) => r.json())
@@ -3248,21 +3345,18 @@ export default function HomePage() {
           const alertList: Alert[] = data.alerts || data;
           if (!Array.isArray(alertList)) return;
 
-          // Detect new alert IDs (not yet in our known set)
           const remoteIds = new Set(alertList.map((a) => a.id));
           const newIds: string[] = [];
           for (const id of remoteIds) {
-            if (!lastAlertIds.has(id)) {
+            if (!knownIds.has(id)) {
               newIds.push(id);
             }
           }
 
           if (newIds.length > 0) {
-            // Classify new alerts
             const newSOSAlerts = newIds.map((id) => alertList.find((a) => a.id === id)).filter((a): a is Alert => !!a && a.category === "sos" && a.status === "activa" && a.priority === "critical");
             const newRegularAlerts = newIds.map((id) => alertList.find((a) => a.id === id)).filter((a): a is Alert => !!a && a.category !== "sos");
 
-            // Handle new SOS alerts
             for (const sos of newSOSAlerts) {
               if (sos.id !== lastSOSId) {
                 lastSOSId = sos.id;
@@ -3275,36 +3369,36 @@ export default function HomePage() {
                     conjunto: sos.description?.match(/\(([^)]+)\)/)?.[1] || "",
                     time: sos.time,
                   });
-                  // Play urgent SOS alarm sound
                   playSOSSound();
                 }
               }
             }
 
-            // Handle new regular (non-SOS) alerts
             if (newRegularAlerts.length > 0) {
               const isOwnAlert = newRegularAlerts.some((a) => a.description?.includes(currentUser?.name || ""));
               if (!isOwnAlert) {
-                // Play pleasant notification chime for regular alerts
                 playAlertSound();
               }
             }
 
-            // Update known IDs
-            lastAlertIds = remoteIds;
+            knownIds = remoteIds;
           }
 
-          // Always update alerts list
           setAlerts(alertList);
         })
         .catch(() => { /* silent */ });
     };
 
-    // Poll every 5 seconds for new alerts
-    const interval = setInterval(pollAlerts, 5000);
-    // Initial check
+    // Initial fetch of all alerts
     pollAlerts();
-    return () => clearInterval(interval);
+    // Poll every 8 seconds as fallback
+    const pollInterval = setInterval(pollAlerts, 8000);
+
+    return () => {
+      clearInterval(pollInterval);
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      eventSource?.close();
+    };
   }, [isLoggedIn, sosActive, currentUser]);
 
   /* PWA install prompt */

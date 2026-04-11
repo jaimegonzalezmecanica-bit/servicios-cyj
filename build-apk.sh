@@ -1,27 +1,34 @@
 #!/bin/bash
 # build-apk.sh - Build APK for Servicios Integrales CyJ
-# Architecture: Client-Server (APK connects to real backend)
-# All devices share data through the server's SQLite database
+# Architecture: Client-Server (APK connects to real backend server)
+# All devices share data through the server's database
+# SOS alarms sound on ALL connected devices in real-time via SSE
 
 set -e
 
 echo "============================================"
 echo "  BUILDING APK - Servicios CyJ"
-echo "  (Client-Server Architecture)"
+echo "  Real-Time Security Platform"
 echo "============================================"
 
 cd /home/z/my-project
 
 # =============================================
 # CONFIGURE SERVER URL HERE
-# This is the URL where your Next.js server runs
-# All devices must be able to reach this URL
+# This MUST be the URL/IP where your server is running
+# All devices connect to this URL for shared data
 # =============================================
 SERVER_URL="${CYJ_SERVER_URL:-http://10.0.2.2:3000}"
+echo ""
 echo "[CONFIG] Server URL: $SERVER_URL"
-echo "[NOTE] For Android emulator, 10.0.2.2 = host machine localhost"
-echo "[NOTE] For real devices on same WiFi, use your computer's LAN IP"
-echo "[NOTE] For production, use your deployed server URL (https://...)"
+echo ""
+echo "  EXAMPLES:"
+echo "    Android emulator (same PC):   http://10.0.2.2:3000"
+echo "    Real devices on same WiFi:    http://192.168.1.100:3000"
+echo "    Deployed server (VPS):        https://seguridad.cyj.cl"
+echo "    Server with IP:               http://45.67.89.123:3000"
+echo ""
+echo "  TO CHANGE: export CYJ_SERVER_URL=http://YOUR_SERVER:3000"
 echo ""
 
 # Step 1: Backup API routes (static export can't have API routes)
@@ -106,13 +113,14 @@ echo "  Location: download/Servicios-CyJ.apk"
 echo "  Server URL: $SERVER_URL"
 echo "============================================"
 echo ""
-echo "IMPORTANT: The server must be running at:"
-echo "  $SERVER_URL"
+echo "  THIS APK connects to: $SERVER_URL"
 echo ""
-echo "To start the server:"
-echo "  bun run dev"
+echo "  IMPORTANT: The server must be running at that URL!"
 echo ""
-echo "For real devices on the same WiFi:"
-echo "  CYJ_SERVER_URL=http://YOUR_LAN_IP:3000 bash build-apk.sh"
+echo "  To deploy the server (always online):"
+echo "    bash deploy-server.sh"
+echo ""
+echo "  To test locally (same WiFi):"
+echo "    CYJ_SERVER_URL=http://192.168.1.XXX:3000 bash build-apk.sh"
 echo ""
 ls -lh download/Servicios-CyJ.apk

@@ -1,23 +1,66 @@
+# Caddyfile for Servicios CyJ - Automatic HTTPS reverse proxy
+#
+# HOW TO USE:
+# 1. Install Caddy: apt install -y caddy (or https://caddy.com/download)
+# 2. Replace YOUR_DOMAIN below with your real domain (e.g., seguridad.cyj.cl)
+# 3. Copy this file to /etc/caddy/Caddyfile
+# 4. Run: sudo systemctl restart caddy
+# 5. Caddy automatically gets HTTPS certificates from Let's Encrypt!
+#
+# WITHOUT A DOMAIN (just IP):
+# Use: http://YOUR_SERVER_IP:80 { ... }
+# Note: SSE works over HTTP too, HTTPS is optional but recommended
+
+# ─── OPTION 1: With domain (automatic HTTPS) ───
+# Uncomment below and replace YOUR_DOMAIN:
+#
+# YOUR_DOMAIN {
+#     # Proxy to Next.js app
+#     reverse_proxy localhost:3000 {
+#         # SSE support - don't buffer server-sent events
+#         flush_interval -1
+#         header_up Host {host}
+#         header_up X-Forwarded-For {remote_host}
+#         header_up X-Forwarded-Proto {scheme}
+#         header_up X-Real-IP {remote_host}
+#     }
+# }
+
+# ─── OPTION 2: IP-based (no HTTPS) ───
+# Uncomment below and replace with your server IP:
+#
+# http://YOUR_SERVER_IP:80 {
+#     reverse_proxy localhost:3000 {
+#         flush_interval -1
+#         header_up Host {host}
+#         header_up X-Forwarded-For {remote_host}
+#         header_up X-Real-IP {remote_host}
+#     }
+# }
+
+# ─── Current: Development/preview proxy on port 81 ───
 :81 {
-	@transform_port_query {
-		query XTransformPort=*
-	}
+    @transform_port_query {
+        query XTransformPort=*
+    }
 
-	handle @transform_port_query {
-		reverse_proxy localhost:{query.XTransformPort} {
-			header_up Host {host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Real-IP {remote_host}
-		}
-	}
+    handle @transform_port_query {
+        reverse_proxy localhost:{query.XTransformPort} {
+            flush_interval -1
+            header_up Host {host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Real-IP {remote_host}
+        }
+    }
 
-	handle {
-		reverse_proxy localhost:3000 {
-			header_up Host {host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Real-IP {remote_host}
-		}
-	}
+    handle {
+        reverse_proxy localhost:3000 {
+            flush_interval -1
+            header_up Host {host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Real-IP {remote_host}
+        }
+    }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ensureSeeded } from "@/lib/store";
 import { db } from "@/lib/db-server";
+import { eventBus } from "@/lib/event-bus";
 
 // GET /api/map-config - Get map configuration (perimeter, entrance, etc.)
 export async function GET(request: NextRequest) {
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// PUT /api/map-config - Save map configuration
+// PUT /api/map-config - Save map configuration AND broadcast to all devices
 export async function PUT(request: NextRequest) {
   try {
     await ensureSeeded();
@@ -81,6 +82,15 @@ export async function PUT(request: NextRequest) {
     });
 
     console.log(`[API /map-config] Updated ${key}`);
+
+    // ─── BROADCAST MAP CHANGE TO ALL CONNECTED DEVICES ───
+    // So all devices see the admin's map changes in real-time
+    eventBus.broadcast("map-update", {
+      key,
+      value,
+      message: `Mapa actualizado: ${key}`,
+    });
+
     return NextResponse.json({ success: true, key, value });
   } catch (error) {
     console.error('[API /map-config PUT] Error:', error);
