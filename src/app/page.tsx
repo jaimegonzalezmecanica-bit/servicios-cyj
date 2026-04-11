@@ -2309,6 +2309,36 @@ function ProfileTab({
     } catch { toast({ title: "Error", description: "No se pudo guardar.", variant: "destructive" }); }
   };
 
+  const handleShareApp = async () => {
+    const shareData = {
+      title: "Servicios Integrales CyJ",
+      text: "Únete a la comunidad de seguridad de Condominio Laguna Norte. Descarga la app CyJ para estar protegido.",
+      url: typeof window !== "undefined" ? window.location.origin : "https://servicios-cyj.cl",
+    };
+    try {
+      if (typeof navigator !== "undefined" && navigator.share) {
+        await navigator.share(shareData);
+      } else if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(shareData.url);
+        toast({ title: "Enlace copiado", description: "El enlace de la app fue copiado al portapapeles." });
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = shareData.url;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-9999px";
+        document.body.appendChild(textArea);
+        textArea.select();
+        try { document.execCommand("copy"); toast({ title: "Enlace copiado", description: "El enlace de la app fue copiado al portapapeles." }); }
+        catch { toast({ title: "No se pudo copiar", description: "Por favor copia manualmente: " + shareData.url, variant: "destructive" }); }
+        document.body.removeChild(textArea);
+      }
+    } catch (err) {
+      if ((err as Error).name !== "AbortError") {
+        toast({ title: "Error al compartir", description: "Intenta copiar el enlace manualmente.", variant: "destructive" });
+      }
+    }
+  };
+
   const permLabels: { key: keyof Role["permissions"]; label: string }[] = [
     { key: "canSOS", label: "Botón SOS" },
     { key: "canReport", label: "Reportar incidentes" },
@@ -2463,7 +2493,7 @@ function ProfileTab({
 
       {/* Actions */}
       <div className="space-y-2">
-        <button onClick={() => toast({ title: "Compartir", description: "Enlace copiado al portapapeles" })} className="w-full bg-green-50 text-green-700 rounded-xl p-4 flex items-center gap-3 active:bg-green-100 transition-colors">
+        <button onClick={handleShareApp} className="w-full bg-green-50 text-green-700 rounded-xl p-4 flex items-center gap-3 active:bg-green-100 transition-colors">
           <Share2 className="w-5 h-5" /><span className="text-sm font-semibold">Compartir App</span>
         </button>
         <button onClick={() => toast({ title: "Centro de Ayuda", description: "Próximamente disponible" })} className="w-full bg-white border border-slate-200 rounded-xl p-4 flex items-center gap-3 active:bg-slate-50 transition-colors">
