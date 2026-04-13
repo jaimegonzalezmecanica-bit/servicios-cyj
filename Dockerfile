@@ -62,5 +62,5 @@ USER nextjs
 HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/api/server-info', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));"
 
-# Start: push schema using local prisma, then start server
-CMD ["sh", "-c", "node_modules/.bin/prisma db push --accept-data-loss 2>/dev/null || true; node server.js"]
+# Start server directly (schema already pushed in build)
+CMD ["node", "server.js"]
