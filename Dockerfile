@@ -1,5 +1,5 @@
 # ─── Build stage ───
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 WORKDIR /app
 
 RUN apk add --no-cache openssl
@@ -16,7 +16,7 @@ RUN cp -r .next/static .next/standalone/.next/
 RUN cp -r public .next/standalone/
 
 # ─── Production stage ───
-FROM node:18-alpine AS runner
+FROM node:20-alpine AS runner
 WORKDIR /app
 
 RUN apk add --no-cache openssl
