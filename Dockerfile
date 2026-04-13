@@ -1,9 +1,9 @@
 # ─── Build stage ───
-FROM node:20-slim AS builder
+FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Install system dependencies (openssl for prisma)
-RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+# Install openssl for prisma
+RUN apk add --no-cache openssl
 
 # Install bun
 RUN npm install -g bun
@@ -32,11 +32,11 @@ RUN cp -r .next/static .next/standalone/.next/ && \
     cp prisma/schema.prisma .next/standalone/prisma/
 
 # ─── Production stage ───
-FROM node:20-slim AS runner
+FROM node:20-alpine AS runner
 WORKDIR /app
 
-# Install system dependencies (openssl for prisma)  
-RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+# Install openssl for prisma
+RUN apk add --no-cache openssl
 
 ENV NODE_ENV=production
 ENV PORT=3000
@@ -44,8 +44,8 @@ ENV HOSTNAME="0.0.0.0"
 ENV DATABASE_URL="file:/app/data/custom.db"
 
 # Create non-root user
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 nextjs
+RUN addgroup -S -g 1001 nodejs && \
+    adduser -S -u 1001 nextjs
 
 # Copy standalone build
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
@@ -63,5 +63,5 @@ USER nextjs
 HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/api/server-info', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));"
 
-# Prisma + SQLite auto-creates tables on first query - no prisma db push needed
+# Prisma + SQLite auto-creates tables on first query
 CMD ["node", "server.js"]
