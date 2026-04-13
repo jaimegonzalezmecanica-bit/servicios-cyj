@@ -50,9 +50,6 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 # Ensure data directory exists
 RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
 
-# Install prisma CLI for runtime schema push
-RUN npm install -g prisma
-
 # Expose port
 EXPOSE 3000
 
@@ -63,5 +60,5 @@ USER nextjs
 HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/api/server-info', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));"
 
-# Start script: push schema then start server
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss 2>/dev/null || true; node server.js"]
+# Start script: push schema using local prisma, then start server
+CMD ["sh", "-c", "node_modules/.bin/prisma db push --accept-data-loss 2>/dev/null || node_modules/prisma/build/index.js db push --accept-data-loss 2>/dev/null || true; node server.js"]
