@@ -26,7 +26,9 @@ RUN npx next build
 # Copy static assets to standalone output
 RUN cp -r .next/static .next/standalone/.next/ && \
     cp -r public .next/standalone/ && \
-    cp -r prisma .next/standalone/prisma
+    cp -r prisma .next/standalone/prisma && \
+    cp -r node_modules/.prisma .next/standalone/node_modules/.prisma && \
+    cp -r node_modules/prisma .next/standalone/node_modules/prisma
 
 # ─── Production stage ───
 FROM node:20-slim AS runner
@@ -60,5 +62,5 @@ USER nextjs
 HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/api/server-info', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));"
 
-# Start script: push schema using local prisma, then start server
-CMD ["sh", "-c", "node_modules/.bin/prisma db push --accept-data-loss 2>/dev/null || node_modules/prisma/build/index.js db push --accept-data-loss 2>/dev/null || true; node server.js"]
+# Start: push schema using local prisma, then start server
+CMD ["sh", "-c", "node_modules/.bin/prisma db push --accept-data-loss 2>/dev/null || true; node server.js"]
