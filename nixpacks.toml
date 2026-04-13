@@ -1,14 +1,12 @@
-# Railway deployment configuration
-# Railway uses Nixpacks by default for Node.js projects
-
+# Railway deployment configuration - Nixpacks
 [phases.setup]
-nixPkgs = ["...", "prisma"]
+nixPkgs = ["...", "openssl"]
 
 [phases.install]
 cmds = ["npm install --legacy-peer-deps"]
 
 [phases.build]
-cmds = ["npx prisma generate", "npm run build"]
+cmds = ["npx prisma generate", "npx next build"]
 
 [phases.start]
 cmd = "node .next/standalone/server.js"
