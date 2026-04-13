@@ -17,24 +17,24 @@ RUN bun install --frozen-lockfile 2>/dev/null || npm install --legacy-peer-deps
 # Copy source code
 COPY . .
 
-# Generate Prisma client (DB will be created at runtime)
+# Generate Prisma client
 RUN npx prisma generate
-
-# Create empty DB file so prisma db push works
-RUN mkdir -p /app/data && npx prisma db push --accept-data-loss 2>/dev/null || true
 
 # Build Next.js in standalone mode
 RUN npx next build
 
 # Copy static assets to standalone output
 RUN cp -r .next/static .next/standalone/.next/ && \
-    cp -r public .next/standalone/
+    cp -r public .next/standalone/ && \
+    cp -r node_modules/.prisma .next/standalone/node_modules/.prisma && \
+    cp -r node_modules/@prisma .next/standalone/node_modules/@prisma && \
+    cp prisma/schema.prisma .next/standalone/prisma/
 
 # ─── Production stage ───
 FROM node:20-slim AS runner
 WORKDIR /app
 
-# Install system dependencies (openssl for prisma)
+# Install system dependencies (openssl for prisma)  
 RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
@@ -62,4 +62,5 @@ USER nextjs
 HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/api/server-info', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));"
 
+# Prisma + SQLite auto-creates tables on first query - no prisma db push needed
 CMD ["node", "server.js"]
