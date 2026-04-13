@@ -28,6 +28,7 @@ RUN cp -r .next/static .next/standalone/.next/ && \
     cp -r public .next/standalone/ && \
     cp -r node_modules/.prisma .next/standalone/node_modules/.prisma && \
     cp -r node_modules/@prisma .next/standalone/node_modules/@prisma && \
+    mkdir -p .next/standalone/prisma && \
     cp prisma/schema.prisma .next/standalone/prisma/
 
 # ─── Production stage ───
