@@ -58,4 +58,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/api/server-info', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));"
 
 # Start script: push schema then start server
-CMD ["sh", "-c", "npx prisma db push --skip-generate 2>/dev/null; node server.js"]
+CMD ["sh", "-c", "npx prisma db push 2>/dev/null; node server.js"]
