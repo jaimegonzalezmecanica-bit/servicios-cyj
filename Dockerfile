@@ -2,6 +2,9 @@
 FROM node:20-slim AS builder
 WORKDIR /app
 
+# Install system dependencies (openssl for prisma)
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+
 # Install bun
 RUN npm install -g bun
 
@@ -28,6 +31,9 @@ RUN cp -r .next/static .next/standalone/.next/ && \
 # ─── Production stage ───
 FROM node:20-slim AS runner
 WORKDIR /app
+
+# Install system dependencies (openssl for prisma)
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
 ENV PORT=3000
@@ -58,4 +64,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/api/server-info', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));"
 
 # Start script: push schema then start server
-CMD ["sh", "-c", "npx prisma db push 2>/dev/null; node server.js"]
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss 2>/dev/null || true; node server.js"]
