@@ -17,8 +17,11 @@ RUN bun install --frozen-lockfile 2>/dev/null || npm install --legacy-peer-deps
 # Copy source code
 COPY . .
 
-# Generate Prisma client and push schema
-RUN npx prisma generate && npx prisma db push --accept-data-loss
+# Generate Prisma client (DB will be created at runtime)
+RUN npx prisma generate
+
+# Create empty DB file so prisma db push works
+RUN mkdir -p /app/data && npx prisma db push --accept-data-loss 2>/dev/null || true
 
 # Build Next.js in standalone mode
 RUN npx next build
