@@ -2,8 +2,6 @@
 FROM node:20-slim AS builder
 WORKDIR /app
 
-ARG BUILD_VERSION=2
-
 # Install system dependencies (openssl for prisma)
 RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
@@ -54,6 +52,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 # Ensure data directory exists
 RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
 
+# Create startup script BEFORE switching user
+RUN printf '#!/bin/sh\nnode_modules/.bin/prisma db push --accept-data-loss 2>/dev/null || true\nexec node server.js\n' > /app/start.sh && chmod +x /app/start.sh && chown nextjs:nodejs /app/start.sh
+
 # Expose port
 EXPOSE 3000
 
@@ -63,8 +64,5 @@ USER nextjs
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/api/server-info', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));"
-
-# Create startup script that inits DB then starts server
-RUN echo '#!/bin/sh\nls node_modules/.prisma 2>/dev/null && node_modules/.bin/prisma db push --accept-data-loss 2>/dev/null || true\nexec node server.js' > /app/start.sh && chmod +x /app/start.sh
 
 CMD ["/app/start.sh"]
