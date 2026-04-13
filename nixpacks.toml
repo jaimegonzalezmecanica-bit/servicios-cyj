@@ -1,0 +1,20 @@
+# Railway deployment configuration
+# Railway uses Nixpacks by default for Node.js projects
+
+[phases.setup]
+nixPkgs = ["...", "prisma"]
+
+[phases.install]
+cmds = ["npm install --legacy-peer-deps"]
+
+[phases.build]
+cmds = ["npx prisma generate", "npm run build"]
+
+[phases.start]
+cmd = "node .next/standalone/server.js"
+
+[variables]
+NODE_ENV = "production"
+HOSTNAME = "0.0.0.0"
+PORT = "3000"
+DATABASE_URL = "file:/app/data/custom.db"

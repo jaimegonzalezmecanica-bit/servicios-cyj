@@ -9,7 +9,7 @@ RUN npm install -g bun
 COPY package.json bun.lock* package-lock.json* ./
 
 # Install dependencies
-RUN bun install --frozen-lockfile 2>/dev/null || npm install
+RUN bun install --frozen-lockfile 2>/dev/null || npm install --legacy-peer-deps
 
 # Copy source code
 COPY . .
@@ -22,7 +22,8 @@ RUN npx next build
 
 # Copy static assets to standalone output
 RUN cp -r .next/static .next/standalone/.next/ && \
-    cp -r public .next/standalone/
+    cp -r public .next/standalone/ && \
+    cp -r prisma .next/standalone/prisma
 
 # ─── Production stage ───
 FROM node:20-slim AS runner
@@ -31,6 +32,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+ENV DATABASE_URL="file:/app/data/custom.db"
 
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs && \
@@ -39,18 +41,11 @@ RUN addgroup --system --gid 1001 nodejs && \
 # Copy standalone build
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 
-# Copy public directory
-COPY --from=builder --chown=nextjs:nodejs /app/public ./public
-
-# Copy Prisma schema and ensure database directory exists
-COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
+# Ensure data directory exists
 RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
 
-# Set DATABASE_URL to persistent location
-ENV DATABASE_URL="file:/app/data/custom.db"
-
-# Run database migration
-RUN npx prisma db push --skip-generate 2>/dev/null || true
+# Install prisma CLI for runtime schema push
+RUN npm install -g prisma
 
 # Expose port
 EXPOSE 3000
@@ -59,7 +54,8 @@ EXPOSE 3000
 USER nextjs
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/api/alerts', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));"
+HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3000/api/server-info', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));"
 
-CMD ["node", "server.js"]
+# Start script: push schema then start server
+CMD ["sh", "-c", "npx prisma db push --skip-generate 2>/dev/null; node server.js"]
