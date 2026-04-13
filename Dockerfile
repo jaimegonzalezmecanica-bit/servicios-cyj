@@ -17,18 +17,15 @@ RUN bun install --frozen-lockfile 2>/dev/null || npm install --legacy-peer-deps
 # Copy source code
 COPY . .
 
-# Generate Prisma client
-RUN npx prisma generate
+# Generate Prisma client and push schema
+RUN npx prisma generate && npx prisma db push --accept-data-loss
 
 # Build Next.js in standalone mode
 RUN npx next build
 
 # Copy static assets to standalone output
 RUN cp -r .next/static .next/standalone/.next/ && \
-    cp -r public .next/standalone/ && \
-    cp -r prisma .next/standalone/prisma && \
-    cp -r node_modules/.prisma .next/standalone/node_modules/.prisma && \
-    cp -r node_modules/prisma .next/standalone/node_modules/prisma
+    cp -r public .next/standalone/
 
 # ─── Production stage ───
 FROM node:20-slim AS runner
@@ -52,9 +49,6 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 # Ensure data directory exists
 RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
 
-# Create startup script BEFORE switching user
-RUN printf '#!/bin/sh\nnode_modules/.bin/prisma db push --accept-data-loss 2>/dev/null || true\nexec node server.js\n' > /app/start.sh && chmod +x /app/start.sh && chown nextjs:nodejs /app/start.sh
-
 # Expose port
 EXPOSE 3000
 
@@ -65,4 +59,4 @@ USER nextjs
 HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/api/server-info', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));"
 
-CMD ["/app/start.sh"]
+CMD ["node", "server.js"]
